@@ -4,10 +4,10 @@ A local, open-source system for making engineering documentation searchable by L
 
 ## Design Principles
 
-- **Single SQLite file** — No external services, no Docker
-- **No local LLM** — Retrieval only; reasoning stays with the host LLM
-- **MCP protocol** — Native support in Cursor, Claude Code, and Codex CLI
-- **uv for Python** — Reproducible, friction-free environment management
+- Single SQLite file — No external services, no Docker
+- No local LLM — Retrieval only; reasoning stays with the host LLM
+- MCP protocol — Native support in Cursor, Claude Code, and Codex CLI
+- uv for Python — Reproducible, friction-free environment management
 
 ## Why This Architecture
 
@@ -15,7 +15,7 @@ Hybrid search gives you the best of both worlds. FTS5 handles exact matches—AP
 
 SQLite FTS5 + sqlite-vec keeps everything in one file. No vector database to operate.
 
-**What this replaces:** grep (too weak for ranking), Qdrant/Weaviate (operational overhead), local LLMs (slow, no accuracy benefit for retrieval).
+What this replaces: grep (too weak for ranking), Qdrant/Weaviate (operational overhead), local LLMs (slow, no accuracy benefit for retrieval).
 
 ## Requirements
 
@@ -36,7 +36,7 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 # Initialize environment and install dependencies
 uv sync
 
-# Convert your HTML docs to Markdown (example for COMSOL)
+# Convert your HTML docs to Markdown (see Comsol example below)
 ./scripts/convert_html.sh /path/to/html/docs ./markdown
 
 # Build index WITHOUT embeddings first (fast, for testing)
@@ -53,6 +53,62 @@ uv run python mcp_server.py --db docs.db
 
 # Configure your IDE (see below)
 ```
+
+## Example: Comsol Documentation
+
+Comsol 6.4's HTML documentation is installed by default on Windows at:
+
+```
+C:\Program Files\COMSOL\COMSOL64\Multiphysics\doc\help\wtpwebapps\ROOT\doc\
+```
+
+The HTML files are spread across subdirectories (e.g., `comsol_ref_manual/`, `acdc_module/`, etc.).
+
+### Windows (PowerShell)
+
+The conversion script requires bash. Use Git Bash (included with Git for Windows) or WSL:
+
+```powershell
+# From Git Bash
+./scripts/convert_html.sh "/c/Program Files/COMSOL/COMSOL64/Multiphysics/doc/help/wtpwebapps/ROOT/doc" ./markdown
+
+# From WSL
+./scripts/convert_html.sh "/mnt/c/Program Files/COMSOL/COMSOL64/Multiphysics/doc/help/wtpwebapps/ROOT/doc" ./markdown
+
+# Build index (no embeddings for initial test)
+uv run python build_index.py ./markdown --output comsol.db --no-embeddings
+
+# Test search
+uv run python mcp_server.py --db comsol.db --test "mesh refinement"
+
+# Rebuild with embeddings for production
+uv run python build_index.py ./markdown --output comsol.db
+```
+
+### macOS/Linux (if Comsol installed locally)
+
+```bash
+# Typical Linux path
+./scripts/convert_html.sh /usr/local/comsol/multiphysics/doc/help/wtpwebapps/ROOT/doc ./markdown
+
+# Or copy docs from Windows machine first
+./scripts/convert_html.sh ./comsol_docs_copy ./markdown
+
+# Build and test
+uv run python build_index.py ./markdown --output comsol.db --no-embeddings
+uv run python mcp_server.py --db comsol.db --test "boundary conditions"
+
+# Production build with embeddings
+uv run python build_index.py ./markdown --output comsol.db
+```
+
+### Expected Output
+
+A typical Comsol installation produces:
+- ~8,000–15,000 HTML files
+- ~20,000–40,000 chunks after indexing
+- ~50–150 MB database with embeddings
+- ~5–10 minutes for full rebuild with embeddings
 
 ## Project Structure
 
@@ -71,19 +127,19 @@ local-docs-mcp/
 
 ### 1. Install System Dependencies
 
-**macOS (Homebrew):**
+macOS (Homebrew):
 ```bash
 brew install python pandoc
 ```
 
-**Ubuntu/Debian:**
+Ubuntu/Debian:
 ```bash
 sudo apt install python3 python3-pip pandoc
 ```
 
-**Windows (with scoop):**
+Windows (scoop):
 ```powershell
-scoop install python pandoc
+scoop install python pandoc git
 ```
 
 ### 2. Initialize the Project
@@ -119,12 +175,12 @@ pandoc -f docx -t gfm input.docx -o output.md
 
 ### 4. Build the Search Index
 
-**For initial testing** (fast, seconds):
+For initial testing (fast, seconds):
 ```bash
 uv run python build_index.py ./markdown --output docs.db --no-embeddings
 ```
 
-**For production use** (with embeddings, minutes):
+For production use (with embeddings, minutes):
 ```bash
 uv run python build_index.py ./markdown --output docs.db
 ```
@@ -141,7 +197,7 @@ Options:
 --verbose           Show progress details
 ```
 
-**Rebuild vs. incremental:** The script hashes files and skips unchanged content. A full rebuild of ~10k pages takes ~5 minutes with embeddings.
+Rebuild vs. incremental: The script hashes files and skips unchanged content. A full rebuild of ~10k pages takes ~5 minutes with embeddings.
 
 ### 5. Test the MCP Server Locally
 
@@ -201,14 +257,14 @@ codex mcp add docs "uv run python /path/to/mcp_server.py --db /path/to/docs.db"
 
 Hybrid keyword + semantic search.
 
-**Parameters:**
+Parameters:
 - `query` (string, required): Search query
 - `limit` (integer, default 10): Max results to return
 - `mode` (string, default "hybrid"): One of "keyword", "semantic", or "hybrid"
 
-**Returns:** Array of objects with `chunk_id`, `source`, `title`, `content`, `score`
+Returns: Array of objects with `chunk_id`, `source`, `title`, `content`, `score`
 
-**Example:**
+Example:
 ```json
 {
   "query": "mesh refinement convergence",
@@ -221,16 +277,16 @@ Hybrid keyword + semantic search.
 
 Retrieve a specific chunk by ID (for follow-up after search).
 
-**Parameters:**
+Parameters:
 - `chunk_id` (string, required): The chunk identifier
 
-**Returns:** Object with full chunk content and metadata
+Returns: Object with full chunk content and metadata
 
 ### `list_sources`
 
 List all indexed source files.
 
-**Returns:** Array of source paths with chunk counts
+Returns: Array of source paths with chunk counts
 
 ## Search Behavior
 
@@ -300,10 +356,10 @@ CREATE TABLE sources (
 
 Documents are split using a header-aware algorithm:
 
-1. **Primary split:** Markdown headers (`##`, `###`, etc.)
-2. **Secondary split:** If a section exceeds `chunk_size`, split on paragraph boundaries
-3. **Tertiary split:** If still too large, split on sentence boundaries
-4. **Overlap:** Each chunk includes `chunk_overlap` characters from the previous chunk's end
+1. Primary split: Markdown headers (`##`, `###`, etc.)
+2. Secondary split: If a section exceeds `chunk_size`, split on paragraph boundaries
+3. Tertiary split: If still too large, split on sentence boundaries
+4. Overlap: Each chunk includes `chunk_overlap` characters from the previous chunk's end
 
 Section titles are preserved as metadata for better context in search results.
 
