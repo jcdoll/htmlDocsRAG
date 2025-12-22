@@ -41,4 +41,5 @@ select = ["E", "F", "I", "UP"]
 [dependency-groups]
 dev = [
     "pytest>=9.0.2",
+    "ruff>=0.4.0",
 ]
