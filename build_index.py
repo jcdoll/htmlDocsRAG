@@ -296,8 +296,8 @@ def main():
     parser.add_argument(
         "--output", "-o",
         type=Path,
-        default=Path("docs.db"),
-        help="Output database path (default: docs.db)",
+        default=Path("db/docs.db"),
+        help="Output database path (default: db/docs.db)",
     )
     parser.add_argument(
         "--chunk-size",
@@ -333,6 +333,9 @@ def main():
     if not args.source_dir.is_dir():
         print(f"Error: {args.source_dir} is not a directory", file=sys.stderr)
         sys.exit(1)
+
+    # Ensure output directory exists
+    args.output.parent.mkdir(parents=True, exist_ok=True)
     
     # Get embedding dimension from model (or default)
     embedding_dim = 384  # Default for bge-small

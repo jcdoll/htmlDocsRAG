@@ -40,21 +40,31 @@ uv sync
 ./scripts/convert_html.sh /path/to/html/docs ./markdown
 
 # Build index WITHOUT embeddings first (fast, for testing)
-uv run python build_index.py ./markdown --output docs.db --no-embeddings
+uv run python build_index.py ./markdown --output db/docs.db --no-embeddings
 
 # Test that search works
-uv run python mcp_server.py --db docs.db --test "your query here"
+uv run python mcp_server.py --db db/docs.db --test "your query here"
 
 # Once satisfied, rebuild WITH embeddings (required for production use)
-uv run python build_index.py ./markdown --output docs.db
+uv run python build_index.py ./markdown --output db/docs.db
 
 # Run the MCP server
-uv run python mcp_server.py --db docs.db
+uv run python mcp_server.py --db db/docs.db
 
 # Configure your IDE (see below)
 ```
 
-## Example: Comsol Documentation
+## Application-Specific Conversion
+
+Some applications use non-semantic HTML (CSS classes instead of proper heading tags). We provide specialized conversion scripts for these cases.
+
+### Comsol Documentation
+
+Options to select during install:
+- Install application libraries for selected products
+- Isntall documentation relevant to selected products
+
+Comsol's HTML documentation uses CSS classes like `Head1_DVD`, `Body_text_DVD` instead of semantic `<h1>`, `<p>` tags. The specialized Python script handles this structure correctly.
 
 Comsol 6.4's HTML documentation is installed by default on Windows at:
 
@@ -64,51 +74,56 @@ C:\Program Files\COMSOL\COMSOL64\Multiphysics\doc\help\wtpwebapps\ROOT\doc\
 
 The HTML files are spread across subdirectories (e.g., `comsol_ref_manual/`, `acdc_module/`, etc.).
 
-### Windows (PowerShell)
-
-The conversion script requires bash. Use Git Bash (included with Git for Windows) or WSL:
+#### Windows
 
 ```powershell
-# From Git Bash
-./scripts/convert_html.sh "/c/Program Files/COMSOL/COMSOL64/Multiphysics/doc/help/wtpwebapps/ROOT/doc" ./markdown
-
-# From WSL
-./scripts/convert_html.sh "/mnt/c/Program Files/COMSOL/COMSOL64/Multiphysics/doc/help/wtpwebapps/ROOT/doc" ./markdown
+# Convert using the Comsol-specific script
+uv run python scripts/convert_comsol_html.py "C:\Program Files\COMSOL\COMSOL64\Multiphysics\doc\help\wtpwebapps\ROOT\doc" ./markdown
 
 # Build index (no embeddings for initial test)
-uv run python build_index.py ./markdown --output comsol.db --no-embeddings
+uv run python build_index.py ./markdown --output db/comsol.db --no-embeddings
 
 # Test search
-uv run python mcp_server.py --db comsol.db --test "mesh refinement"
+uv run python mcp_server.py --db db/comsol.db --test "mesh refinement"
 
 # Rebuild with embeddings for production
-uv run python build_index.py ./markdown --output comsol.db
+uv run python build_index.py ./markdown --output db/comsol.db
 ```
 
-### macOS/Linux (if Comsol installed locally)
+#### macOS/Linux
 
 ```bash
 # Typical Linux path
-./scripts/convert_html.sh /usr/local/comsol/multiphysics/doc/help/wtpwebapps/ROOT/doc ./markdown
+uv run python scripts/convert_comsol_html.py /usr/local/comsol/multiphysics/doc/help/wtpwebapps/ROOT/doc ./markdown
 
 # Or copy docs from Windows machine first
-./scripts/convert_html.sh ./comsol_docs_copy ./markdown
+uv run python scripts/convert_comsol_html.py ./comsol_docs_copy ./markdown
 
 # Build and test
-uv run python build_index.py ./markdown --output comsol.db --no-embeddings
-uv run python mcp_server.py --db comsol.db --test "boundary conditions"
+uv run python build_index.py ./markdown --output db/comsol.db --no-embeddings
+uv run python mcp_server.py --db db/comsol.db --test "boundary conditions"
 
 # Production build with embeddings
-uv run python build_index.py ./markdown --output comsol.db
+uv run python build_index.py ./markdown --output db/comsol.db
 ```
 
-### Expected Output
+#### Expected Output
 
 A typical Comsol installation produces:
 - ~8,000–15,000 HTML files
 - ~20,000–40,000 chunks after indexing
 - ~50–150 MB database with embeddings
 - ~5–10 minutes for full rebuild with embeddings
+
+## Generic HTML Conversion
+
+For documentation that uses semantic HTML (proper `<h1>`, `<h2>`, `<p>` tags), use the generic conversion script:
+
+```bash
+./scripts/convert_html.sh /path/to/html/docs ./markdown
+```
+
+This uses pandoc to convert HTML to GitHub-Flavored Markdown. Works well for most documentation systems.
 
 ## Project Structure
 
@@ -118,9 +133,11 @@ local-docs-mcp/
 ├── build_index.py      # Indexing script
 ├── mcp_server.py       # MCP server exposing search tools
 ├── scripts/
-│   └── convert_html.sh # HTML to Markdown conversion
+│   ├── convert_html.sh         # Generic HTML to Markdown (pandoc)
+│   └── convert_comsol_html.py  # Comsol-specific conversion
 ├── markdown/           # Converted docs (gitignored)
-└── docs.db             # SQLite database (gitignored)
+└── db/                 # SQLite databases (gitignored)
+    └── docs.db
 ```
 
 ## Detailed Setup
@@ -177,19 +194,19 @@ pandoc -f docx -t gfm input.docx -o output.md
 
 For initial testing (fast, seconds):
 ```bash
-uv run python build_index.py ./markdown --output docs.db --no-embeddings
+uv run python build_index.py ./markdown --output db/docs.db --no-embeddings
 ```
 
 For production use (with embeddings, minutes):
 ```bash
-uv run python build_index.py ./markdown --output docs.db
+uv run python build_index.py ./markdown --output db/docs.db
 ```
 
 Embeddings enable semantic search—finding "mesh refinement" when someone searches "make grid finer." Without embeddings, only exact keyword matching works. Always use embeddings for actual team usage.
 
 Options:
 ```
---output PATH       Output database path (default: docs.db)
+--output PATH       Output database path (default: db/docs.db)
 --chunk-size N      Target chunk size in characters (default: 1500)
 --chunk-overlap N   Overlap between chunks (default: 200)
 --embedding-model   Model name (default: BAAI/bge-small-en-v1.5)
@@ -202,7 +219,7 @@ Rebuild vs. incremental: The script hashes files and skips unchanged content. A 
 ### 5. Test the MCP Server Locally
 
 ```bash
-uv run python mcp_server.py --db docs.db
+uv run python mcp_server.py --db db/docs.db
 ```
 
 The server communicates via stdio. For testing, you can pipe JSON-RPC messages, but it's easier to just configure your IDE and test there.
@@ -218,7 +235,7 @@ Create or edit `.cursor/mcp.json` in your project root:
   "mcpServers": {
     "docs": {
       "command": "uv",
-      "args": ["run", "python", "/absolute/path/to/mcp_server.py", "--db", "/absolute/path/to/docs.db"],
+      "args": ["run", "python", "/absolute/path/to/mcp_server.py", "--db", "/absolute/path/to/db/docs.db"],
       "cwd": "/absolute/path/to/local-docs-mcp"
     }
   }
@@ -236,7 +253,7 @@ Add to your Claude Code MCP configuration:
   "mcpServers": {
     "docs": {
       "command": "uv",
-      "args": ["run", "python", "mcp_server.py", "--db", "docs.db"],
+      "args": ["run", "python", "mcp_server.py", "--db", "db/docs.db"],
       "cwd": "/absolute/path/to/local-docs-mcp"
     }
   }
@@ -248,7 +265,7 @@ Add to your Claude Code MCP configuration:
 Configure via `~/.codex/config.json` or use the CLI:
 
 ```bash
-codex mcp add docs "uv run python /path/to/mcp_server.py --db /path/to/docs.db"
+codex mcp add docs "uv run python /path/to/mcp_server.py --db /path/to/db/docs.db"
 ```
 
 ## MCP Tools Exposed
@@ -372,7 +389,7 @@ Section titles are preserved as metadata for better context in search results.
 ./scripts/convert_html.sh /path/to/html ./markdown
 
 # Rebuild index with embeddings (incremental—skips unchanged files)
-uv run python build_index.py ./markdown --output docs.db
+uv run python build_index.py ./markdown --output db/docs.db
 
 # Restart MCP server (or it picks up changes on next query)
 ```
@@ -383,13 +400,13 @@ uv run python build_index.py ./markdown --output docs.db
 # Check database integrity
 uv run python -c "
 import sqlite3
-conn = sqlite3.connect('docs.db')
+conn = sqlite3.connect('db/docs.db')
 print(f'Chunks: {conn.execute(\"SELECT COUNT(*) FROM chunks\").fetchone()[0]}')
 print(f'Sources: {conn.execute(\"SELECT COUNT(*) FROM sources\").fetchone()[0]}')
 "
 
 # Test search from command line
-uv run python mcp_server.py --db docs.db --test "boundary conditions"
+uv run python mcp_server.py --db db/docs.db --test "boundary conditions"
 ```
 
 ## Troubleshooting
@@ -415,7 +432,7 @@ uv add sqlite-vec --reinstall
 
 ### "MCP server not connecting"
 
-1. Test manually: `uv run python mcp_server.py --db docs.db` should start without errors
+1. Test manually: `uv run python mcp_server.py --db db/docs.db` should start without errors
 2. Check paths in IDE config are absolute
 3. Check `cwd` is set correctly
 4. Look at IDE's MCP debug logs

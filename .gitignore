@@ -1,6 +1,6 @@
 # This project
-markdown/**/*.md
-*.db*
+markdown/
+db/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
