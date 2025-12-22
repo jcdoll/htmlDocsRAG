@@ -1,15 +1,29 @@
 """Pytest fixtures for local-docs-mcp tests."""
 
+import sys
 import tempfile
 from pathlib import Path
 
 import pytest
 
+# Ensure project root is in path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+
+@pytest.fixture(autouse=True)
+def cleanup_db():
+    """Ensure database connection is closed after each test."""
+    yield
+    # Close any open database connection after each test
+    from mcp_server import close_db
+
+    close_db()
+
 
 @pytest.fixture
 def temp_dir():
     """Create a temporary directory for test files."""
-    with tempfile.TemporaryDirectory() as tmpdir:
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
         yield Path(tmpdir)
 
 
@@ -103,10 +117,6 @@ def temp_db(temp_dir: Path) -> Path:
 @pytest.fixture
 def populated_db(temp_db: Path, sample_markdown_files: Path) -> Path:
     """Create and populate a test database without embeddings."""
-    import sys
-
-    sys.path.insert(0, str(Path(__file__).parent.parent))
-
     from build_index import init_database, process_file
 
     conn = init_database(temp_db, embedding_dim=384)

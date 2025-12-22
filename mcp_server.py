@@ -259,6 +259,19 @@ def init_db(db_path: Path) -> None:
         _has_vec = False
 
 
+def close_db() -> None:
+    """Close the database connection."""
+    global _conn
+    if _conn is not None:
+        try:
+            # Checkpoint WAL to release file locks on Windows
+            _conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+        except Exception:
+            pass
+        _conn.close()
+        _conn = None
+
+
 def create_server() -> Server:
     """Create and configure the MCP server."""
     server = Server("docs-search")
