@@ -62,7 +62,7 @@ Some applications use non-semantic HTML (CSS classes instead of proper heading t
 
 Options to select during install:
 - Install application libraries for selected products
-- Isntall documentation relevant to selected products
+- Install documentation relevant to selected products
 
 Comsol's HTML documentation uses CSS classes like `Head1_DVD`, `Body_text_DVD` instead of semantic `<h1>`, `<p>` tags. The specialized Python script handles this structure correctly.
 
@@ -109,11 +109,10 @@ uv run python build_index.py ./markdown --output db/comsol.db
 
 #### Expected Output
 
-A typical Comsol installation produces:
-- ~8,000–15,000 HTML files
-- ~20,000–40,000 chunks after indexing
-- ~50–150 MB database with embeddings
-- ~5–10 minutes for full rebuild with embeddings
+A typical Comsol installation (tested with 6.4):
+- 8,000 HTML files
+- 72,000 chunks after indexing
+- 250 MB database with embeddings
 
 ## Generic HTML Conversion
 
@@ -334,6 +333,26 @@ Uses cosine similarity on embeddings. Handles vocabulary mismatch:
 - "how do I set up walls" → finds boundary conditions
 
 Essential for users who don't know exact terminology.
+
+### Example Search Commands
+
+Test search from the command line:
+
+```bash
+# Keyword search (exact terms)
+uv run python mcp_server.py --db db/comsol.db --test "mesh refinement"
+uv run python mcp_server.py --db db/comsol.db --test "boundary conditions"
+uv run python mcp_server.py --db db/comsol.db --test "convergence error"
+
+# Semantic search (natural language - finds relevant docs even without exact terms)
+uv run python mcp_server.py --db db/comsol.db --test "make the grid finer near edges"
+uv run python mcp_server.py --db db/comsol.db --test "simulation not finishing"
+uv run python mcp_server.py --db db/comsol.db --test "how to set up walls in fluid flow"
+
+# Force specific search mode
+uv run python mcp_server.py --db db/comsol.db --test "MUMPS solver" --mode keyword
+uv run python mcp_server.py --db db/comsol.db --test "physics won't solve" --mode semantic
+```
 
 ## Database Schema
 
