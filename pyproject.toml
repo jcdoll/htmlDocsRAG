@@ -25,12 +25,6 @@ dependencies = [
 [project.scripts]
 docs-mcp = "mcp_server:main"
 
-[project.optional-dependencies]
-dev = [
-    "pytest>=8.0.0",
-    "ruff>=0.4.0",
-]
-
 [tool.ruff]
 line-length = 100
 target-version = "py311"

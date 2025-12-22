@@ -3,6 +3,8 @@
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from mcp_server import (
@@ -66,8 +68,6 @@ class TestSearchDocsImpl:
 
     def test_invalid_mode_raises_error(self, populated_db: Path):
         init_db(populated_db)
-
-        import pytest
 
         with pytest.raises(ValueError, match="Invalid search mode"):
             search_docs_impl("test", limit=5, mode="invalid_mode")
