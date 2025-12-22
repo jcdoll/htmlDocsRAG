@@ -5,7 +5,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from build_index import parse_markdown_sections, chunk_text
+from build_index import chunk_text, parse_markdown_sections
 
 
 class TestParseMarkdownSections:

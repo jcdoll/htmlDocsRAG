@@ -1,6 +1,5 @@
 """Pytest fixtures for local-docs-mcp tests."""
 
-import sqlite3
 import tempfile
 from pathlib import Path
 
@@ -105,9 +104,10 @@ def temp_db(temp_dir: Path) -> Path:
 def populated_db(temp_db: Path, sample_markdown_files: Path) -> Path:
     """Create and populate a test database without embeddings."""
     import sys
+
     sys.path.insert(0, str(Path(__file__).parent.parent))
 
-    from build_index import init_database, process_file, index_chunks
+    from build_index import init_database, process_file
 
     conn = init_database(temp_db, embedding_dim=384)
 
@@ -120,10 +120,13 @@ def populated_db(temp_db: Path, sample_markdown_files: Path) -> Path:
         )
         if chunks:
             # Index without embeddings
-            conn.executemany("""
+            conn.executemany(
+                """
                 INSERT OR REPLACE INTO chunks (id, source, title, content, chunk_index)
                 VALUES (:id, :source, :title, :content, :chunk_index)
-            """, chunks)
+            """,
+                chunks,
+            )
             conn.commit()
 
     conn.close()

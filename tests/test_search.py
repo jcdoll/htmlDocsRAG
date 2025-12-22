@@ -3,17 +3,14 @@
 import sys
 from pathlib import Path
 
-import pytest
-
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from mcp_server import (
-    init_db,
-    search_fts,
-    search_docs_impl,
     get_chunk_impl,
+    init_db,
     list_sources_impl,
-    _conn,
+    search_docs_impl,
+    search_fts,
 )
 
 

@@ -10,11 +10,18 @@ Creates:
 
 import argparse
 import hashlib
+import logging
 import re
 import sqlite3
 import sys
 import time
 from pathlib import Path
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(levelname)s: %(message)s",
+)
+logger = logging.getLogger(__name__)
 
 # Lazy imports for optional heavy dependencies
 _embedding_model = None
@@ -25,6 +32,7 @@ def get_embedding_model(model_name: str):
     global _embedding_model
     if _embedding_model is None:
         from sentence_transformers import SentenceTransformer
+
         _embedding_model = SentenceTransformer(model_name)
     return _embedding_model
 
@@ -39,7 +47,7 @@ def init_database(db_path: Path, embedding_dim: int = 384) -> sqlite3.Connection
     conn = sqlite3.connect(db_path)
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
-    
+
     # Main chunks table
     conn.execute("""
         CREATE TABLE IF NOT EXISTS chunks (
@@ -51,7 +59,7 @@ def init_database(db_path: Path, embedding_dim: int = 384) -> sqlite3.Connection
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
-    
+
     # Source tracking for incremental updates
     conn.execute("""
         CREATE TABLE IF NOT EXISTS sources (
@@ -60,7 +68,7 @@ def init_database(db_path: Path, embedding_dim: int = 384) -> sqlite3.Connection
             indexed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         )
     """)
-    
+
     # FTS5 full-text index
     conn.execute("""
         CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
@@ -71,7 +79,7 @@ def init_database(db_path: Path, embedding_dim: int = 384) -> sqlite3.Connection
             tokenize='porter unicode61'
         )
     """)
-    
+
     # Triggers to keep FTS in sync
     conn.execute("""
         CREATE TRIGGER IF NOT EXISTS chunks_ai AFTER INSERT ON chunks BEGIN
@@ -93,14 +101,15 @@ def init_database(db_path: Path, embedding_dim: int = 384) -> sqlite3.Connection
             VALUES (NEW.rowid, NEW.title, NEW.content);
         END
     """)
-    
+
     # Vector index via sqlite-vec
     try:
         import sqlite_vec
+
         conn.enable_load_extension(True)
         sqlite_vec.load(conn)
         conn.enable_load_extension(False)
-        
+
         conn.execute(f"""
             CREATE VIRTUAL TABLE IF NOT EXISTS chunks_vec USING vec0(
                 id TEXT PRIMARY KEY,
@@ -108,8 +117,8 @@ def init_database(db_path: Path, embedding_dim: int = 384) -> sqlite3.Connection
             )
         """)
     except Exception as e:
-        print(f"Warning: sqlite-vec not available ({e}). Semantic search disabled.", file=sys.stderr)
-    
+        logger.warning(f"sqlite-vec not available: {e}")
+
     conn.execute("CREATE INDEX IF NOT EXISTS idx_chunks_source ON chunks(source)")
     conn.commit()
     return conn
@@ -121,32 +130,32 @@ def parse_markdown_sections(text: str) -> list[tuple[str | None, str]]:
     Returns list of (title, content) tuples.
     """
     # Match markdown headers (## Header or ### Header, etc.)
-    header_pattern = re.compile(r'^(#{1,6})\s+(.+)$', re.MULTILINE)
-    
+    header_pattern = re.compile(r"^(#{1,6})\s+(.+)$", re.MULTILINE)
+
     sections = []
     last_end = 0
     last_title = None
-    
+
     for match in header_pattern.finditer(text):
         # Content before this header belongs to previous section
         if match.start() > last_end:
-            content = text[last_end:match.start()].strip()
+            content = text[last_end : match.start()].strip()
             if content:
                 sections.append((last_title, content))
-        
+
         last_title = match.group(2).strip()
         last_end = match.end()
-    
+
     # Don't forget content after the last header
     if last_end < len(text):
         content = text[last_end:].strip()
         if content:
             sections.append((last_title, content))
-    
+
     # Handle case with no headers
     if not sections and text.strip():
         sections.append((None, text.strip()))
-    
+
     return sections
 
 
@@ -158,29 +167,33 @@ def chunk_text(
     """
     Split text into chunks respecting paragraph and sentence boundaries.
     """
+    # Handle empty or whitespace-only input
+    if not text or not text.strip():
+        return []
+
     if len(text) <= chunk_size:
         return [text]
-    
+
     chunks = []
-    
+
     # Try splitting on double newlines (paragraphs)
-    paragraphs = re.split(r'\n\n+', text)
-    
+    paragraphs = re.split(r"\n\n+", text)
+
     current_chunk = ""
     for para in paragraphs:
         para = para.strip()
         if not para:
             continue
-            
+
         if len(current_chunk) + len(para) + 2 <= chunk_size:
             current_chunk = f"{current_chunk}\n\n{para}" if current_chunk else para
         else:
             if current_chunk:
                 chunks.append(current_chunk)
-            
+
             # If single paragraph exceeds chunk size, split on sentences
             if len(para) > chunk_size:
-                sentences = re.split(r'(?<=[.!?])\s+', para)
+                sentences = re.split(r"(?<=[.!?])\s+", para)
                 current_chunk = ""
                 for sent in sentences:
                     if len(current_chunk) + len(sent) + 1 <= chunk_size:
@@ -191,24 +204,28 @@ def chunk_text(
                         # If single sentence exceeds chunk size, hard split
                         if len(sent) > chunk_size:
                             for i in range(0, len(sent), chunk_size - chunk_overlap):
-                                chunks.append(sent[i:i + chunk_size])
+                                chunks.append(sent[i : i + chunk_size])
                             current_chunk = ""
                         else:
                             current_chunk = sent
             else:
                 current_chunk = para
-    
+
     if current_chunk:
         chunks.append(current_chunk)
-    
+
     # Add overlap
     if chunk_overlap > 0 and len(chunks) > 1:
         overlapped = [chunks[0]]
         for i in range(1, len(chunks)):
-            prev_end = chunks[i-1][-chunk_overlap:] if len(chunks[i-1]) > chunk_overlap else chunks[i-1]
+            prev_chunk = chunks[i - 1]
+            if len(prev_chunk) > chunk_overlap:
+                prev_end = prev_chunk[-chunk_overlap:]
+            else:
+                prev_end = prev_chunk
             overlapped.append(prev_end + " " + chunks[i])
         chunks = overlapped
-    
+
     return chunks
 
 
@@ -219,28 +236,31 @@ def process_file(
     chunk_overlap: int,
 ) -> list[dict]:
     """Process a single markdown file into chunks."""
-    text = path.read_text(encoding='utf-8', errors='replace')
-    relative_path = str(path.relative_to(base_dir))
-    
+    text = path.read_text(encoding="utf-8", errors="replace")
+    # Use forward slashes for consistent cross-platform paths
+    relative_path = str(path.relative_to(base_dir)).replace("\\", "/")
+
     sections = parse_markdown_sections(text)
-    
+
     all_chunks = []
     chunk_index = 0
-    
+
     for title, content in sections:
         text_chunks = chunk_text(content, chunk_size, chunk_overlap)
-        
+
         for chunk_text_content in text_chunks:
             chunk_id = f"{relative_path}:{chunk_index}"
-            all_chunks.append({
-                'id': chunk_id,
-                'source': relative_path,
-                'title': title,
-                'content': chunk_text_content,
-                'chunk_index': chunk_index,
-            })
+            all_chunks.append(
+                {
+                    "id": chunk_id,
+                    "source": relative_path,
+                    "title": title,
+                    "content": chunk_text_content,
+                    "chunk_index": chunk_index,
+                }
+            )
             chunk_index += 1
-    
+
     return all_chunks
 
 
@@ -253,35 +273,41 @@ def index_chunks(
     """Insert chunks into database with embeddings."""
     if not chunks:
         return
-    
+
     # Insert chunk metadata and content
-    conn.executemany("""
+    conn.executemany(
+        """
         INSERT OR REPLACE INTO chunks (id, source, title, content, chunk_index)
         VALUES (:id, :source, :title, :content, :chunk_index)
-    """, chunks)
-    
+    """,
+        chunks,
+    )
+
     # Generate and insert embeddings
     if model_name:
         try:
             model = get_embedding_model(model_name)
-            texts = [c['content'] for c in chunks]
-            
-            if verbose:
-                print(f"  Generating embeddings for {len(texts)} chunks...")
-            
+            texts = [c["content"] for c in chunks]
+
+            logger.debug(f"Generating embeddings for {len(texts)} chunks...")
+
             embeddings = model.encode(texts, show_progress_bar=verbose)
-            
+
             # sqlite-vec expects the embedding as a blob
             import struct
+
             for chunk, embedding in zip(chunks, embeddings):
-                embedding_blob = struct.pack(f'{len(embedding)}f', *embedding)
-                conn.execute("""
+                embedding_blob = struct.pack(f"{len(embedding)}f", *embedding)
+                conn.execute(
+                    """
                     INSERT OR REPLACE INTO chunks_vec (id, embedding)
                     VALUES (?, ?)
-                """, (chunk['id'], embedding_blob))
+                """,
+                    (chunk["id"], embedding_blob),
+                )
         except Exception as e:
-            print(f"Warning: Could not generate embeddings: {e}", file=sys.stderr)
-    
+            logger.warning(f"Could not generate embeddings: {e}")
+
     conn.commit()
 
 
@@ -295,7 +321,8 @@ def main():
         help="Directory containing Markdown files",
     )
     parser.add_argument(
-        "--output", "-o",
+        "--output",
+        "-o",
         type=Path,
         default=Path("db/docs.db"),
         help="Output database path (default: db/docs.db)",
@@ -324,40 +351,44 @@ def main():
         help="Skip embedding generation (FTS5 only)",
     )
     parser.add_argument(
-        "--verbose", "-v",
+        "--verbose",
+        "-v",
         action="store_true",
         help="Show detailed progress",
     )
-    
+
     args = parser.parse_args()
-    
+
+    if args.verbose:
+        logging.getLogger().setLevel(logging.DEBUG)
+
     if not args.source_dir.is_dir():
-        print(f"Error: {args.source_dir} is not a directory", file=sys.stderr)
+        logger.error(f"{args.source_dir} is not a directory")
         sys.exit(1)
 
     # Ensure output directory exists
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    
+
     # Get embedding dimension from model (or default)
     embedding_dim = 384  # Default for bge-small
     model_name = None if args.no_embeddings else args.embedding_model
-    
+
     if model_name and not args.no_embeddings:
         try:
             model = get_embedding_model(model_name)
             embedding_dim = model.get_sentence_embedding_dimension()
         except Exception as e:
-            print(f"Warning: Could not load embedding model: {e}", file=sys.stderr)
-            print("Continuing without embeddings.", file=sys.stderr)
+            logger.warning(f"Could not load embedding model: {e}")
+            logger.warning("Continuing without embeddings.")
             model_name = None
-    
+
     # Initialize database
     conn = init_database(args.output, embedding_dim)
-    
+
     # Find all markdown files
     md_files = list(args.source_dir.rglob("*.md"))
     total_files = len(md_files)
-    print(f"Found {total_files} Markdown files")
+    logger.info(f"Found {total_files} Markdown files")
 
     # Process each file
     total_chunks = 0
@@ -372,18 +403,15 @@ def main():
         relative_path = str(md_path.relative_to(args.source_dir))
 
         existing = conn.execute(
-            "SELECT hash FROM sources WHERE path = ?",
-            (relative_path,)
+            "SELECT hash FROM sources WHERE path = ?", (relative_path,)
         ).fetchone()
 
         if existing and existing[0] == current_hash:
-            if args.verbose:
-                print(f"  Skipping (unchanged): {relative_path}")
+            logger.debug(f"Skipping (unchanged): {relative_path}")
             files_skipped += 1
             continue
 
-        if args.verbose:
-            print(f"  Processing: {relative_path}")
+        logger.debug(f"Processing: {relative_path}")
 
         # Remove old chunks for this source
         conn.execute("DELETE FROM chunks WHERE source = ?", (relative_path,))
@@ -405,9 +433,12 @@ def main():
             total_chunks += len(chunks)
 
         # Update source tracking
-        conn.execute("""
+        conn.execute(
+            """
             INSERT OR REPLACE INTO sources (path, hash) VALUES (?, ?)
-        """, (relative_path, current_hash))
+        """,
+            (relative_path, current_hash),
+        )
         conn.commit()
 
         files_processed += 1
@@ -437,9 +468,11 @@ def main():
                 eta_str = "calculating..."
 
             elapsed_str = f"{elapsed:.0f}s" if elapsed < 60 else f"{elapsed / 60:.1f}m"
-            print(f"Progress: {completed}/{total_files} ({pct:.1f}%) | "
-                  f"Processed: {files_processed} | Skipped: {files_skipped} | "
-                  f"Elapsed: {elapsed_str} | ETA: {eta_str}")
+            logger.info(
+                f"Progress: {completed}/{total_files} ({pct:.1f}%) | "
+                f"Processed: {files_processed} | Skipped: {files_skipped} | "
+                f"Elapsed: {elapsed_str} | ETA: {eta_str}"
+            )
             last_progress_time = current_time
 
     total_time = time.time() - start_time
@@ -450,11 +483,11 @@ def main():
     else:
         time_str = f"{total_time:.0f} seconds"
 
-    print(f"\nDone in {time_str}:")
-    print(f"  Files processed: {files_processed}")
-    print(f"  Files skipped (unchanged): {files_skipped}")
-    print(f"  Total chunks indexed: {total_chunks}")
-    print(f"  Database: {args.output}")
+    logger.info(f"Done in {time_str}")
+    logger.info(f"  Files processed: {files_processed}")
+    logger.info(f"  Files skipped (unchanged): {files_skipped}")
+    logger.info(f"  Total chunks indexed: {total_chunks}")
+    logger.info(f"  Database: {args.output}")
 
 
 if __name__ == "__main__":

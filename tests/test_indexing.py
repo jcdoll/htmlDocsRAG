@@ -1,10 +1,7 @@
 """Tests for the indexing pipeline."""
 
-import sqlite3
 import sys
 from pathlib import Path
-
-import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -202,9 +199,12 @@ class TestFTSTriggers:
         conn.commit()
 
         # Verify it's searchable
-        assert conn.execute(
-            "SELECT * FROM chunks_fts WHERE chunks_fts MATCH 'unique_term_xyz'"
-        ).fetchone() is not None
+        assert (
+            conn.execute(
+                "SELECT * FROM chunks_fts WHERE chunks_fts MATCH 'unique_term_xyz'"
+            ).fetchone()
+            is not None
+        )
 
         # Delete it
         conn.execute("DELETE FROM chunks WHERE id = 'test:0'")
@@ -234,13 +234,19 @@ class TestFTSTriggers:
         conn.commit()
 
         # Old content should not be found
-        assert conn.execute(
-            "SELECT * FROM chunks_fts WHERE chunks_fts MATCH 'original_content_abc'"
-        ).fetchone() is None
+        assert (
+            conn.execute(
+                "SELECT * FROM chunks_fts WHERE chunks_fts MATCH 'original_content_abc'"
+            ).fetchone()
+            is None
+        )
 
         # New content should be found
-        assert conn.execute(
-            "SELECT * FROM chunks_fts WHERE chunks_fts MATCH 'updated_content_xyz'"
-        ).fetchone() is not None
+        assert (
+            conn.execute(
+                "SELECT * FROM chunks_fts WHERE chunks_fts MATCH 'updated_content_xyz'"
+            ).fetchone()
+            is not None
+        )
 
         conn.close()
