@@ -40,7 +40,13 @@ curl -L https://github.com/jcdoll/htmlDocsRAG/releases/latest/download/comsol.db
 docs-mcp --db comsol.db --test "mesh refinement"
 
 # Configure your IDE
-claude mcp add comsol-docs "docs-mcp --db comsol.db"
+claude mcp add --transport stdio comsol-docs -- docs-mcp --db comsol.db
+
+# Install the skill (helps Claude know when to use COMSOL docs)
+# macOS/Linux:
+mkdir -p ~/.claude/skills && curl -L https://raw.githubusercontent.com/jcdoll/htmlDocsRAG/main/.claude/skills/comsol-docs.md -o ~/.claude/skills/comsol-docs.md
+# Windows (PowerShell):
+mkdir -Force $env:USERPROFILE\.claude\skills; Invoke-WebRequest -Uri "https://raw.githubusercontent.com/jcdoll/htmlDocsRAG/main/.claude/skills/comsol-docs.md" -OutFile "$env:USERPROFILE\.claude\skills\comsol-docs.md"
 ```
 
 ## Quick Start (Building Your Own Database)
@@ -365,7 +371,7 @@ Otherwise, use the full path:
 #### Claude Code
 
 ```bash
-claude mcp add comsol-docs "docs-mcp --db comsol.db"
+claude mcp add --transport stdio comsol-docs -- docs-mcp --db comsol.db
 ```
 
 Or edit `~/.claude/settings.json` with the JSON above.

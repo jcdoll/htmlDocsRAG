@@ -67,6 +67,7 @@ _conn: sqlite3.Connection | None = None
 _has_vec: bool = False
 _embedding_model = None
 _model_name: str = "BAAI/bge-small-en-v1.5"
+_db_name: str = "documentation"  # Friendly name derived from database file
 
 
 def get_connection() -> sqlite3.Connection:
@@ -279,7 +280,10 @@ def list_sources_impl() -> list[dict]:
 
 def init_db(db_path: Path) -> None:
     """Initialize database connection."""
-    global _conn, _has_vec
+    global _conn, _has_vec, _db_name
+
+    # Derive friendly name from database filename (e.g., "comsol.db" -> "COMSOL")
+    _db_name = db_path.stem.upper()
 
     _conn = sqlite3.connect(db_path, check_same_thread=False)
     _conn.execute("PRAGMA journal_mode=WAL")
@@ -320,7 +324,7 @@ def create_server() -> Server:
         return [
             Tool(
                 name="search_docs",
-                description="Search documentation using keyword and/or semantic search",
+                description=f"Search {_db_name} documentation using keyword and/or semantic search",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -345,7 +349,7 @@ def create_server() -> Server:
             ),
             Tool(
                 name="get_chunk",
-                description="Retrieve a specific documentation chunk by ID",
+                description=f"Retrieve a specific {_db_name} documentation chunk by ID",
                 inputSchema={
                     "type": "object",
                     "properties": {
@@ -359,7 +363,7 @@ def create_server() -> Server:
             ),
             Tool(
                 name="list_sources",
-                description="List all indexed documentation sources",
+                description=f"List all indexed {_db_name} documentation sources",
                 inputSchema={
                     "type": "object",
                     "properties": {},
@@ -448,6 +452,13 @@ def main():
         help="Run a test search instead of starting the server",
     )
     parser.add_argument(
+        "--mode",
+        type=str,
+        choices=["keyword", "semantic", "hybrid"],
+        default="keyword",
+        help="Search mode for --test (default: keyword, fast). Use 'hybrid' for semantic+keyword.",
+    )
+    parser.add_argument(
         "--model",
         type=str,
         default="BAAI/bge-small-en-v1.5",
@@ -491,7 +502,7 @@ def main():
         sys.exit(1)
 
     if args.test:
-        test_search(db_path, args.test)
+        test_search(db_path, args.test, args.mode)
     else:
         import asyncio
 
