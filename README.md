@@ -10,52 +10,39 @@ Make engineering documentation searchable by LLM coding assistants (Claude Code,
 
 ## Quick Start (Pre-built Database)
 
-**macOS/Linux:**
+macOS/Linux:
 ```bash
 uv tool install https://github.com/jcdoll/htmlDocsRAG.git
 mkdir -p ~/.local/share/docs-mcp
 curl -L https://github.com/jcdoll/htmlDocsRAG/releases/latest/download/comsol.db -o ~/.local/share/docs-mcp/comsol.db
 docs-mcp --db comsol.db --test "mesh refinement"
+docs-mcp --help
 ```
 
-**Windows (PowerShell):**
+Windows (PowerShell):
 ```powershell
 uv tool install https://github.com/jcdoll/htmlDocsRAG.git
 mkdir -Force "$env:LOCALAPPDATA\docs-mcp"
 Invoke-WebRequest -Uri "https://github.com/jcdoll/htmlDocsRAG/releases/latest/download/comsol.db" -OutFile "$env:LOCALAPPDATA\docs-mcp\comsol.db"
 docs-mcp --db comsol.db --test "mesh refinement"
+docs-mcp --help
 ```
 
-**Configure your IDE:**
+You next need to plug it into your favorite IDE. There are two steps: MCP server and skills.
+
+Claude Code:
 ```bash
-# Claude Code
 claude mcp add --transport stdio comsol-docs -- docs-mcp --db comsol.db
 mkdir -p ~/.claude/skills && curl -L https://raw.githubusercontent.com/jcdoll/htmlDocsRAG/main/.claude/skills/comsol-docs.md -o ~/.claude/skills/comsol-docs.md
+```
 
-# Codex CLI
+Codex CLI:
+```bash
 codex mcp add comsol-docs "docs-mcp --db comsol.db"
 mkdir -p ~/.codex/skills && curl -L https://raw.githubusercontent.com/jcdoll/htmlDocsRAG/main/.codex/skills/comsol-docs.md -o ~/.codex/skills/comsol-docs.md
-
-# Cursor - add to ~/.cursor/mcp.json (see IDE Configuration below)
 ```
 
-## Quick Start (Build Your Own)
-
-```bash
-git clone https://github.com/jcdoll/htmlDocsRAG.git && cd htmlDocsRAG
-uv sync
-./scripts/convert_html.sh /path/to/html/docs ./markdown
-uv run python build_index.py ./markdown --output db/docs.db --no-embeddings
-uv run python mcp_server.py --db db/docs.db --test "your query"
-uv run python build_index.py ./markdown --output db/docs.db
-uv tool install .
-```
-
-For COMSOL-specific conversion, see [docs/comsol.md](docs/comsol.md).
-
-## IDE Configuration
-
-**Cursor/Other IDEs** - add to `~/.cursor/mcp.json` (or equivalent):
+Cursor: add to `~/.cursor/mcp.json`:
 ```json
 {
   "mcpServers": {
@@ -69,7 +56,23 @@ For COMSOL-specific conversion, see [docs/comsol.md](docs/comsol.md).
 
 Database files in `~/.local/share/docs-mcp/` (Linux/macOS) or `%LOCALAPPDATA%\docs-mcp\` (Windows) can be referenced by name only.
 
+## Quick Start (Build Your Own)
+
+```bash
+git clone https://github.com/jcdoll/htmlDocsRAG.git && cd htmlDocsRAG
+uv sync
+./scripts/convert_html.sh /path/to/html/docs ./markdown
+uv run python build_index.py ./markdown --output db/docs.db --no-embeddings
+uv run python mcp_server.py --db db/docs.db --test "your query"
+uv run python build_index.py ./markdown --output db/docs.db
+uv tool install .
+```
+
+For COMSOL-specific conversion, see [docs/comsol.md](docs/comsol.md). You can adapt the approach for other HTML docs that have some nuance in the internal format.
+
 ## MCP Tools
+
+There are a few key MCP commands for the LLM.
 
 | Tool | Description |
 |------|-------------|
@@ -78,6 +81,8 @@ Database files in `~/.local/share/docs-mcp/` (Linux/macOS) or `%LOCALAPPDATA%\do
 | `list_sources` | List all indexed source files. |
 
 ## Publishing Databases
+
+You can publish database snapshots for ease of use using the following example command:
 
 ```bash
 gh release create 2025-12-21 db/comsol.db --title "Comsol 6.4 docs" --notes "Pre-built database with embeddings"
