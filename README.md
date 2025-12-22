@@ -225,47 +225,62 @@ The server communicates via stdio. For testing, you can pipe JSON-RPC messages, 
 
 ## IDE Configuration
 
-### Cursor
+Configuration can be per-project or global. Global configuration makes the docs available in all projects.
 
-Create or edit `.cursor/mcp.json` in your project root:
+### Global Configuration (Recommended)
+
+#### Claude Code
+
+Edit `~/.claude/settings.json`:
 
 ```json
 {
   "mcpServers": {
-    "docs": {
+    "comsol-docs": {
       "command": "uv",
-      "args": ["run", "python", "/absolute/path/to/mcp_server.py", "--db", "/absolute/path/to/db/docs.db"],
-      "cwd": "/absolute/path/to/local-docs-mcp"
+      "args": ["run", "python", "mcp_server.py", "--db", "db/comsol.db"],
+      "cwd": "/absolute/path/to/htmlDocsRAG"
     }
   }
 }
 ```
 
-Restart Cursor after saving. The tools appear in the model's available tools.
+Or use the CLI:
+```bash
+claude mcp add comsol-docs "uv run python mcp_server.py --db db/comsol.db" --cwd "/absolute/path/to/htmlDocsRAG"
+```
 
-### Claude Code
+#### Cursor
 
-Add to your Claude Code MCP configuration:
+Edit `~/.cursor/mcp.json`:
 
 ```json
 {
   "mcpServers": {
-    "docs": {
+    "comsol-docs": {
       "command": "uv",
-      "args": ["run", "python", "mcp_server.py", "--db", "db/docs.db"],
-      "cwd": "/absolute/path/to/local-docs-mcp"
+      "args": ["run", "python", "mcp_server.py", "--db", "db/comsol.db"],
+      "cwd": "/absolute/path/to/htmlDocsRAG"
     }
   }
 }
 ```
 
-### Codex CLI
-
-Configure via `~/.codex/config.json` or use the CLI:
+#### Codex CLI
 
 ```bash
-codex mcp add docs "uv run python /path/to/mcp_server.py --db /path/to/db/docs.db"
+codex mcp add comsol-docs "uv run python /path/to/mcp_server.py --db /path/to/db/comsol.db"
 ```
+
+### Per-Project Configuration
+
+For project-specific docs, create `.cursor/mcp.json` or `.claude/settings.json` in the project root with the same format as above.
+
+### Notes
+
+- Use absolute paths for `cwd` so the server can find the uv virtual environment
+- Restart the IDE after changing MCP configuration
+- The server name (e.g., `comsol-docs`) can be anything descriptive
 
 ## MCP Tools Exposed
 
