@@ -1,3 +1,11 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["."]
+only-include = ["mcp_server.py", "build_index.py"]
+
 [project]
 name = "local-docs-mcp"
 version = "0.1.0"
@@ -13,6 +21,9 @@ dependencies = [
     "beautifulsoup4>=4.12.0",
     "lxml>=5.0.0",
 ]
+
+[project.scripts]
+docs-mcp = "mcp_server:main"
 
 [project.optional-dependencies]
 dev = [

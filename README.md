@@ -24,11 +24,32 @@ What this replaces: grep (too weak for ranking), Qdrant/Weaviate (operational ov
 - pandoc (for HTML→Markdown conversion)
 - ~500MB disk for a typical docs corpus + embeddings
 
-## Quick Start
+## Quick Start (Using Pre-built Database)
+
+If someone has already built the database for your documentation:
+
+```bash
+# Install the tool
+uv tool install https://github.com/jcdoll/htmlDocsRAG.git
+
+# Download the pre-built database (Linux/macOS)
+mkdir -p ~/.local/share/docs-mcp
+curl -L https://github.com/jcdoll/htmlDocsRAG/releases/latest/download/comsol.db -o ~/.local/share/docs-mcp/comsol.db
+
+# Test it works
+docs-mcp --db comsol.db --test "mesh refinement"
+
+# Configure your IDE
+claude mcp add comsol-docs "docs-mcp --db comsol.db"
+```
+
+## Quick Start (Building Your Own Database)
+
+To index your own documentation:
 
 ```bash
 # Clone and enter directory
-git clone <repo-url> && cd local-docs-mcp
+git clone <repo-url> && cd htmlDocsRAG
 
 # Install uv if needed
 curl -LsSf https://astral.sh/uv/install.sh | sh
@@ -48,10 +69,9 @@ uv run python mcp_server.py --db db/docs.db --test "your query here"
 # Once satisfied, rebuild WITH embeddings (required for production use)
 uv run python build_index.py ./markdown --output db/docs.db
 
-# Run the MCP server
-uv run python mcp_server.py --db db/docs.db
-
-# Configure your IDE (see below)
+# Install as a tool and configure your IDE
+uv tool install .
+docs-mcp --db db/docs.db --test "your query here"
 ```
 
 ## Application-Specific Conversion
@@ -223,62 +243,171 @@ uv run python mcp_server.py --db db/docs.db
 
 The server communicates via stdio. For testing, you can pipe JSON-RPC messages, but it's easier to just configure your IDE and test there.
 
+## Installation as a Tool (Recommended)
+
+Install the MCP server globally so it's available from any project:
+
+```bash
+# Install as a uv tool (recommended)
+uv tool install /path/to/htmlDocsRAG
+
+# Or with pipx
+pipx install /path/to/htmlDocsRAG
+
+# Verify installation
+docs-mcp --help
+```
+
+After installation, the `docs-mcp` command is available globally.
+
+### Updating
+
+```bash
+# Reinstall to pick up changes
+uv tool install --force /path/to/htmlDocsRAG
+```
+
+## Using Pre-built Databases
+
+If someone has already built the database, you don't need to regenerate it—just download and use it.
+
+### Default Database Location
+
+The tool looks for databases in a platform-specific directory:
+
+- Linux/macOS: `~/.local/share/docs-mcp/`
+- Windows: `%LOCALAPPDATA%\docs-mcp\`
+
+```bash
+# List available databases
+docs-mcp --list
+
+# Use a database by name (no path needed if in default directory)
+docs-mcp --db comsol.db --test "mesh refinement"
+```
+
+### Installing a Pre-built Database
+
+```bash
+# Create the default directory (Linux/macOS)
+mkdir -p ~/.local/share/docs-mcp
+
+# Create the default directory (Windows PowerShell)
+mkdir -Force "$env:LOCALAPPDATA\docs-mcp"
+
+# Download a pre-built database
+curl -L https://github.com/jcdoll/htmlDocsRAG/releases/latest/download/comsol.db -o ~/.local/share/docs-mcp/comsol.db
+
+# Verify it works
+docs-mcp --db comsol.db --test "boundary conditions"
+```
+
+### Creating a Release
+
+To publish a database for others to use:
+
+```bash
+# Create a dated release with the database attached
+gh release create 2025-12-21 db/comsol.db --title "Comsol 6.4 docs (2025-12-21)" --notes "Pre-built database with embeddings (MEMS + CAD Import + Design + Livelink)"
+
+# Or upload to an existing release
+gh release upload 2025-12-21 db/comsol.db --clobber
+```
+
+### Distributing Databases
+
+1. GitHub Releases (recommended for public projects)
+   - Build the database with embeddings
+   - Create a release with `gh release create`
+   - Users download via `curl` or browser
+
+2. Cloud Storage (for teams)
+   - Upload to S3, Google Drive, Dropbox, etc.
+   - Share download links with your team
+
+3. Direct Copy (for local use)
+   - Copy the `.db` file to the user's default directory
+
+Database files are typically 50–250 MB depending on documentation size and whether embeddings are included.
+
 ## IDE Configuration
 
-Configuration can be per-project or global. Global configuration makes the docs available in all projects.
+### With Tool Installation (Recommended)
 
-### Global Configuration (Recommended)
+After installing as a tool, IDE configuration is simple—no `cwd` needed.
+
+If your database is in the default directory (`~/.local/share/docs-mcp/` or `%LOCALAPPDATA%\docs-mcp\`), you can use just the filename:
+
+```json
+{
+  "mcpServers": {
+    "comsol-docs": {
+      "command": "docs-mcp",
+      "args": ["--db", "comsol.db"]
+    }
+  }
+}
+```
+
+Otherwise, use the full path:
+
+```json
+{
+  "mcpServers": {
+    "comsol-docs": {
+      "command": "docs-mcp",
+      "args": ["--db", "/absolute/path/to/comsol.db"]
+    }
+  }
+}
+```
 
 #### Claude Code
 
-Edit `~/.claude/settings.json`:
-
-```json
-{
-  "mcpServers": {
-    "comsol-docs": {
-      "command": "uv",
-      "args": ["run", "python", "mcp_server.py", "--db", "db/comsol.db"],
-      "cwd": "/absolute/path/to/htmlDocsRAG"
-    }
-  }
-}
-```
-
-Or use the CLI:
 ```bash
-claude mcp add comsol-docs "uv run python mcp_server.py --db db/comsol.db" --cwd "/absolute/path/to/htmlDocsRAG"
+claude mcp add comsol-docs "docs-mcp --db comsol.db"
 ```
+
+Or edit `~/.claude/settings.json` with the JSON above.
 
 #### Cursor
 
-Edit `~/.cursor/mcp.json`:
-
-```json
-{
-  "mcpServers": {
-    "comsol-docs": {
-      "command": "uv",
-      "args": ["run", "python", "mcp_server.py", "--db", "db/comsol.db"],
-      "cwd": "/absolute/path/to/htmlDocsRAG"
-    }
-  }
-}
-```
+Edit `~/.cursor/mcp.json` with the JSON above.
 
 #### Codex CLI
 
 ```bash
-codex mcp add comsol-docs "uv run python /path/to/mcp_server.py --db /path/to/db/comsol.db"
+codex mcp add comsol-docs "docs-mcp --db comsol.db"
 ```
 
-### Per-Project Configuration
+### Without Tool Installation
 
-For project-specific docs, create `.cursor/mcp.json` or `.claude/settings.json` in the project root with the same format as above.
+If you prefer not to install globally, use `uv run` with `cwd`:
+
+```json
+{
+  "mcpServers": {
+    "comsol-docs": {
+      "command": "uv",
+      "args": ["run", "python", "mcp_server.py", "--db", "db/comsol.db"],
+      "cwd": "/absolute/path/to/htmlDocsRAG"
+    }
+  }
+}
+```
+
+### Deployment Options Comparison
+
+| Approach | Pros | Cons |
+|----------|------|------|
+| `uv tool install` | Clean global binary, simple config | Reinstall on updates |
+| `pipx install` | Same as uv tool | Slightly slower |
+| `uv run` in project dir | No install step | Requires cwd, verbose config |
+| Docker | Fully isolated | Overkill, slow startup |
 
 ### Notes
 
-- Use absolute paths for `cwd` so the server can find the uv virtual environment
+- Use absolute paths for the database file
 - Restart the IDE after changing MCP configuration
 - The server name (e.g., `comsol-docs`) can be anything descriptive
 

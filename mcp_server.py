@@ -10,6 +10,7 @@ Tools:
 
 import argparse
 import logging
+import os
 import sqlite3
 import struct
 import sys
@@ -24,6 +25,42 @@ logging.basicConfig(
     format="%(levelname)s: %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+
+def get_data_dir() -> Path:
+    """Get the default data directory for database files."""
+    if sys.platform == "win32":
+        base = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
+    else:
+        base = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
+    return base / "docs-mcp"
+
+
+def resolve_db_path(db_arg: str) -> Path:
+    """Resolve database path, checking default directory if not absolute."""
+    db_path = Path(db_arg)
+
+    # If it's an absolute path or exists as given, use it
+    if db_path.is_absolute() or db_path.exists():
+        return db_path
+
+    # Check in default data directory
+    data_dir = get_data_dir()
+    default_path = data_dir / db_arg
+    if default_path.exists():
+        return default_path
+
+    # Return as-is (will fail with helpful error later)
+    return db_path
+
+
+def list_databases() -> list[Path]:
+    """List available databases in the default data directory."""
+    data_dir = get_data_dir()
+    if not data_dir.exists():
+        return []
+    return sorted(data_dir.glob("*.db"))
+
 
 # Global database connection
 _conn: sqlite3.Connection | None = None
@@ -43,9 +80,11 @@ def get_embedding_model():
     """Lazy-load the embedding model."""
     global _embedding_model
     if _embedding_model is None:
+        logger.info(f"Loading embedding model: {_model_name} (this may take a moment...)")
         from sentence_transformers import SentenceTransformer
 
         _embedding_model = SentenceTransformer(_model_name)
+        logger.info("Embedding model loaded")
     return _embedding_model
 
 
@@ -357,13 +396,13 @@ def create_server() -> Server:
     return server
 
 
-def test_search(db_path: Path, query: str) -> None:
+def test_search(db_path: Path, query: str, mode: str = "keyword") -> None:
     """Run a test search and print results."""
     init_db(db_path)
 
-    print(f"Testing search: '{query}'\n")
+    print(f"Testing search: '{query}' (mode: {mode})\n")
 
-    results = search_docs_impl(query, limit=5, mode="hybrid")
+    results = search_docs_impl(query, limit=5, mode=mode)
 
     if not results:
         print("No results found.")
@@ -387,12 +426,21 @@ async def run_server(db_path: Path) -> None:
 
 
 def main():
-    parser = argparse.ArgumentParser(description="MCP server for documentation search")
+    data_dir = get_data_dir()
+
+    parser = argparse.ArgumentParser(
+        description="MCP server for documentation search",
+        epilog=f"Database files are searched in: {data_dir}",
+    )
     parser.add_argument(
         "--db",
-        type=Path,
-        default=Path("docs.db"),
-        help="Path to the SQLite database",
+        type=str,
+        help="Database name or path (e.g., 'comsol.db' or '/path/to/docs.db')",
+    )
+    parser.add_argument(
+        "--list",
+        action="store_true",
+        help="List available databases in the default directory",
     )
     parser.add_argument(
         "--test",
@@ -408,20 +456,46 @@ def main():
 
     args = parser.parse_args()
 
+    # List available databases
+    if args.list:
+        databases = list_databases()
+        if databases:
+            print(f"Available databases in {data_dir}:")
+            for db in databases:
+                print(f"  {db.name}")
+        else:
+            print(f"No databases found in {data_dir}")
+            print("Copy .db files to this directory or use --db with a full path.")
+        sys.exit(0)
+
+    # Require --db
+    if not args.db:
+        databases = list_databases()
+        if databases:
+            print("Available databases:")
+            for db in databases:
+                print(f"  docs-mcp --db {db.name}")
+        else:
+            print("No databases found. Use --db to specify a database path.")
+        parser.print_usage()
+        sys.exit(1)
+
     global _model_name
     _model_name = args.model
 
-    if not args.db.exists():
+    db_path = resolve_db_path(args.db)
+    if not db_path.exists():
         logger.error(f"Database not found: {args.db}")
-        logger.error("Run build_index.py first to create the database.")
+        logger.error(f"Searched in: {db_path}")
+        logger.error(f"Default directory: {data_dir}")
         sys.exit(1)
 
     if args.test:
-        test_search(args.db, args.test)
+        test_search(db_path, args.test)
     else:
         import asyncio
 
-        asyncio.run(run_server(args.db))
+        asyncio.run(run_server(db_path))
 
 
 if __name__ == "__main__":
