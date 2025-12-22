@@ -11,9 +11,13 @@ of semantic HTML tags.
 
 import sys
 import re
+import warnings
 from pathlib import Path
 from concurrent.futures import ProcessPoolExecutor, as_completed
-from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup, XMLParsedAsHTMLWarning
+
+# Suppress XML parsing warnings for HTML files
+warnings.filterwarnings("ignore", category=XMLParsedAsHTMLWarning)
 
 
 def get_text_content(element):
@@ -51,12 +55,9 @@ def convert_html_to_markdown(html_content: str, source_path: str = "") -> str:
         lines.append(f"# {title}")
         lines.append("")
     
-    # Process all divs in order
-    for div in body.find_all('div', recursive=False):
+    # Process all divs with classes (not just direct children - content may be nested)
+    for div in body.find_all('div', class_=True):
         class_list = div.get('class', [])
-        if not class_list:
-            continue
-        
         class_name = class_list[0] if class_list else ""
         text = get_text_content(div)
         

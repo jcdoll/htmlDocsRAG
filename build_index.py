@@ -13,6 +13,7 @@ import hashlib
 import re
 import sqlite3
 import sys
+import time
 from pathlib import Path
 
 # Lazy imports for optional heavy dependencies
@@ -355,60 +356,101 @@ def main():
     
     # Find all markdown files
     md_files = list(args.source_dir.rglob("*.md"))
-    print(f"Found {len(md_files)} Markdown files")
-    
+    total_files = len(md_files)
+    print(f"Found {total_files} Markdown files")
+
     # Process each file
     total_chunks = 0
     files_processed = 0
     files_skipped = 0
-    
-    for md_path in md_files:
+    start_time = time.time()
+    last_progress_time = start_time
+
+    for i, md_path in enumerate(md_files):
         # Check if file has changed
         current_hash = file_hash(md_path)
         relative_path = str(md_path.relative_to(args.source_dir))
-        
+
         existing = conn.execute(
-            "SELECT hash FROM sources WHERE path = ?", 
+            "SELECT hash FROM sources WHERE path = ?",
             (relative_path,)
         ).fetchone()
-        
+
         if existing and existing[0] == current_hash:
             if args.verbose:
                 print(f"  Skipping (unchanged): {relative_path}")
             files_skipped += 1
             continue
-        
+
         if args.verbose:
             print(f"  Processing: {relative_path}")
-        
+
         # Remove old chunks for this source
         conn.execute("DELETE FROM chunks WHERE source = ?", (relative_path,))
         try:
             conn.execute("DELETE FROM chunks_vec WHERE id LIKE ?", (f"{relative_path}:%",))
         except sqlite3.OperationalError:
             pass  # chunks_vec might not exist
-        
+
         # Process and index
         chunks = process_file(
-            md_path, 
+            md_path,
             args.source_dir,
             args.chunk_size,
             args.chunk_overlap,
         )
-        
+
         if chunks:
             index_chunks(conn, chunks, model_name, args.verbose)
             total_chunks += len(chunks)
-        
+
         # Update source tracking
         conn.execute("""
             INSERT OR REPLACE INTO sources (path, hash) VALUES (?, ?)
         """, (relative_path, current_hash))
         conn.commit()
-        
+
         files_processed += 1
-    
-    print(f"\nDone:")
+
+        # Progress update every 2 seconds or every 100 files
+        current_time = time.time()
+        if current_time - last_progress_time >= 2 or (i + 1) % 100 == 0 or (i + 1) == total_files:
+            elapsed = current_time - start_time
+            completed = i + 1
+            pct = (completed / total_files) * 100
+
+            # Calculate ETA based on files processed (not skipped)
+            if files_processed > 0:
+                avg_time_per_file = elapsed / files_processed
+                remaining_to_process = total_files - completed
+                # Estimate how many of remaining will need processing (use current ratio)
+                process_ratio = files_processed / completed if completed > 0 else 1
+                eta_seconds = remaining_to_process * process_ratio * avg_time_per_file
+
+                if eta_seconds >= 3600:
+                    eta_str = f"{eta_seconds / 3600:.1f}h"
+                elif eta_seconds >= 60:
+                    eta_str = f"{eta_seconds / 60:.1f}m"
+                else:
+                    eta_str = f"{eta_seconds:.0f}s"
+            else:
+                eta_str = "calculating..."
+
+            elapsed_str = f"{elapsed:.0f}s" if elapsed < 60 else f"{elapsed / 60:.1f}m"
+            print(f"Progress: {completed}/{total_files} ({pct:.1f}%) | "
+                  f"Processed: {files_processed} | Skipped: {files_skipped} | "
+                  f"Elapsed: {elapsed_str} | ETA: {eta_str}")
+            last_progress_time = current_time
+
+    total_time = time.time() - start_time
+    if total_time >= 3600:
+        time_str = f"{total_time / 3600:.1f} hours"
+    elif total_time >= 60:
+        time_str = f"{total_time / 60:.1f} minutes"
+    else:
+        time_str = f"{total_time:.0f} seconds"
+
+    print(f"\nDone in {time_str}:")
     print(f"  Files processed: {files_processed}")
     print(f"  Files skipped (unchanged): {files_skipped}")
     print(f"  Total chunks indexed: {total_chunks}")
