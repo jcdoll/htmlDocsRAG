@@ -1,349 +1,61 @@
 # Local Documentation Retrieval via MCP
 
-A local, open-source system for making engineering documentation searchable by LLM coding assistants (Cursor, Claude Code, Codex CLI). Uses SQLite for storage, FTS5 for keyword search, and vector embeddings for semantic search.
-
-## Design Principles
-
-- Single SQLite file — No external services, no Docker
-- No local LLM — Retrieval only; reasoning stays with the host LLM
-- MCP protocol — Native support in Cursor, Claude Code, and Codex CLI
-- uv for Python — Reproducible, friction-free environment management
-
-## Why This Architecture
-
-Hybrid search gives you the best of both worlds. FTS5 handles exact matches—API names, error messages, symbols. Embeddings handle vocabulary mismatch—when someone searches "make grid finer near edges" instead of "mesh refinement," or "simulation stuck" instead of "convergence tolerance."
-
-SQLite FTS5 + sqlite-vec keeps everything in one file. No vector database to operate.
-
-What this replaces: grep (too weak for ranking), Qdrant/Weaviate (operational overhead), local LLMs (slow, no accuracy benefit for retrieval).
+Make engineering documentation searchable by LLM coding assistants (Claude Code, Cursor, Codex CLI). Uses SQLite FTS5 for keyword search and vector embeddings for semantic search. Single file, no external services.
 
 ## Requirements
 
 - Python 3.11+
-- SQLite 3.35+ (ships with Python)
-- pandoc (for HTML→Markdown conversion)
-- ~500MB disk for a typical docs corpus + embeddings
+- uv (recommended) or pip
+- ~500MB disk for typical docs corpus + embeddings
 
-## Quick Start (Using Pre-built Database)
+## Quick Start (Pre-built Database)
 
-If someone has already built the database for your documentation:
-
+**macOS/Linux:**
 ```bash
-# Install the tool
 uv tool install https://github.com/jcdoll/htmlDocsRAG.git
-
-# Download the pre-built database (Linux/macOS)
 mkdir -p ~/.local/share/docs-mcp
 curl -L https://github.com/jcdoll/htmlDocsRAG/releases/latest/download/comsol.db -o ~/.local/share/docs-mcp/comsol.db
-
-# Test it works
-docs-mcp --db comsol.db --test "mesh refinement"
-
-# Configure your IDE
-claude mcp add --transport stdio comsol-docs -- docs-mcp --db comsol.db
-
-# Install the skill (helps Claude know when to use COMSOL docs)
-# macOS/Linux:
-mkdir -p ~/.claude/skills && curl -L https://raw.githubusercontent.com/jcdoll/htmlDocsRAG/main/.claude/skills/comsol-docs.md -o ~/.claude/skills/comsol-docs.md
-# Windows (PowerShell):
-mkdir -Force $env:USERPROFILE\.claude\skills; Invoke-WebRequest -Uri "https://raw.githubusercontent.com/jcdoll/htmlDocsRAG/main/.claude/skills/comsol-docs.md" -OutFile "$env:USERPROFILE\.claude\skills\comsol-docs.md"
-```
-
-## Quick Start (Building Your Own Database)
-
-To index your own documentation:
-
-```bash
-# Clone and enter directory
-git clone <repo-url> && cd htmlDocsRAG
-
-# Install uv if needed
-curl -LsSf https://astral.sh/uv/install.sh | sh
-
-# Initialize environment and install dependencies
-uv sync
-
-# Convert your HTML docs to Markdown (see Comsol example below)
-./scripts/convert_html.sh /path/to/html/docs ./markdown
-
-# Build index WITHOUT embeddings first (fast, for testing)
-uv run python build_index.py ./markdown --output db/docs.db --no-embeddings
-
-# Test that search works
-uv run python mcp_server.py --db db/docs.db --test "your query here"
-
-# Once satisfied, rebuild WITH embeddings (required for production use)
-uv run python build_index.py ./markdown --output db/docs.db
-
-# Install as a tool and configure your IDE
-uv tool install .
-docs-mcp --db db/docs.db --test "your query here"
-```
-
-## Application-Specific Conversion
-
-Some applications use non-semantic HTML (CSS classes instead of proper heading tags). We provide specialized conversion scripts for these cases.
-
-### Comsol Documentation
-
-Options to select during install:
-- Install application libraries for selected products
-- Install documentation relevant to selected products
-
-Comsol's HTML documentation uses CSS classes like `Head1_DVD`, `Body_text_DVD` instead of semantic `<h1>`, `<p>` tags. The specialized Python script handles this structure correctly.
-
-Comsol 6.4's HTML documentation is installed by default on Windows at:
-
-```
-C:\Program Files\COMSOL\COMSOL64\Multiphysics\doc\help\wtpwebapps\ROOT\doc\
-```
-
-The HTML files are spread across subdirectories (e.g., `comsol_ref_manual/`, `acdc_module/`, etc.).
-
-#### Windows
-
-```powershell
-# Convert using the Comsol-specific script
-uv run python scripts/convert_comsol_html.py "C:\Program Files\COMSOL\COMSOL64\Multiphysics\doc\help\wtpwebapps\ROOT\doc" ./markdown
-
-# Build index (no embeddings for initial test)
-uv run python build_index.py ./markdown --output db/comsol.db --no-embeddings
-
-# Test search
-uv run python mcp_server.py --db db/comsol.db --test "mesh refinement"
-
-# Rebuild with embeddings for production
-uv run python build_index.py ./markdown --output db/comsol.db
-```
-
-#### macOS/Linux
-
-```bash
-# Typical Linux path
-uv run python scripts/convert_comsol_html.py /usr/local/comsol/multiphysics/doc/help/wtpwebapps/ROOT/doc ./markdown
-
-# Or copy docs from Windows machine first
-uv run python scripts/convert_comsol_html.py ./comsol_docs_copy ./markdown
-
-# Build and test
-uv run python build_index.py ./markdown --output db/comsol.db --no-embeddings
-uv run python mcp_server.py --db db/comsol.db --test "boundary conditions"
-
-# Production build with embeddings
-uv run python build_index.py ./markdown --output db/comsol.db
-```
-
-#### Expected Output
-
-A typical Comsol installation (tested with 6.4):
-- 8,000 HTML files
-- 72,000 chunks after indexing
-- 250 MB database with embeddings
-
-## Generic HTML Conversion
-
-For documentation that uses semantic HTML (proper `<h1>`, `<h2>`, `<p>` tags), use the generic conversion script:
-
-```bash
-./scripts/convert_html.sh /path/to/html/docs ./markdown
-```
-
-This uses pandoc to convert HTML to GitHub-Flavored Markdown. Works well for most documentation systems.
-
-## Project Structure
-
-```
-local-docs-mcp/
-├── pyproject.toml      # Dependencies and project config
-├── build_index.py      # Indexing script
-├── mcp_server.py       # MCP server exposing search tools
-├── scripts/
-│   ├── convert_html.sh         # Generic HTML to Markdown (pandoc)
-│   └── convert_comsol_html.py  # Comsol-specific conversion
-├── markdown/           # Converted docs (gitignored)
-└── db/                 # SQLite databases (gitignored)
-    └── docs.db
-```
-
-## Detailed Setup
-
-### 1. Install System Dependencies
-
-macOS (Homebrew):
-```bash
-brew install python pandoc
-```
-
-Ubuntu/Debian:
-```bash
-sudo apt install python3 python3-pip pandoc
-```
-
-Windows (scoop):
-```powershell
-scoop install python pandoc git
-```
-
-### 2. Initialize the Project
-
-```bash
-uv sync
-```
-
-This reads `pyproject.toml` and installs all dependencies into a local `.venv`.
-
-### 3. Convert HTML Documentation to Markdown
-
-The included script handles batch conversion:
-
-```bash
-./scripts/convert_html.sh /path/to/source/html ./markdown
-```
-
-What it does:
-- Recursively finds all `.html` and `.htm` files
-- Converts each to GitHub-Flavored Markdown via pandoc
-- Preserves directory structure
-- Strips `.html` extension (so `api/mesh.html` → `api/mesh.md`)
-
-For other source formats, adjust the pandoc command:
-```bash
-# From RST (Sphinx docs)
-pandoc -f rst -t gfm input.rst -o output.md
-
-# From DOCX
-pandoc -f docx -t gfm input.docx -o output.md
-```
-
-### 4. Build the Search Index
-
-For initial testing (fast, seconds):
-```bash
-uv run python build_index.py ./markdown --output db/docs.db --no-embeddings
-```
-
-For production use (with embeddings, minutes):
-```bash
-uv run python build_index.py ./markdown --output db/docs.db
-```
-
-Embeddings enable semantic search—finding "mesh refinement" when someone searches "make grid finer." Without embeddings, only exact keyword matching works. Always use embeddings for actual team usage.
-
-Options:
-```
---output PATH       Output database path (default: db/docs.db)
---chunk-size N      Target chunk size in characters (default: 1500)
---chunk-overlap N   Overlap between chunks (default: 200)
---embedding-model   Model name (default: BAAI/bge-small-en-v1.5)
---no-embeddings     Skip embedding generation (testing/debugging only)
---verbose           Show progress details
-```
-
-Rebuild vs. incremental: The script hashes files and skips unchanged content. A full rebuild of ~10k pages takes ~5 minutes with embeddings.
-
-### 5. Test the MCP Server Locally
-
-```bash
-uv run python mcp_server.py --db db/docs.db
-```
-
-The server communicates via stdio. For testing, you can pipe JSON-RPC messages, but it's easier to just configure your IDE and test there.
-
-## Installation as a Tool (Recommended)
-
-Install the MCP server globally so it's available from any project:
-
-```bash
-# Install as a uv tool (recommended)
-uv tool install /path/to/htmlDocsRAG
-
-# Or with pipx
-pipx install /path/to/htmlDocsRAG
-
-# Verify installation
-docs-mcp --help
-```
-
-After installation, the `docs-mcp` command is available globally.
-
-### Updating
-
-```bash
-# Reinstall to pick up changes
-uv tool install --force /path/to/htmlDocsRAG
-```
-
-## Using Pre-built Databases
-
-If someone has already built the database, you don't need to regenerate it—just download and use it.
-
-### Default Database Location
-
-The tool looks for databases in a platform-specific directory:
-
-- Linux/macOS: `~/.local/share/docs-mcp/`
-- Windows: `%LOCALAPPDATA%\docs-mcp\`
-
-```bash
-# List available databases
-docs-mcp --list
-
-# Use a database by name (no path needed if in default directory)
 docs-mcp --db comsol.db --test "mesh refinement"
 ```
 
-### Installing a Pre-built Database
-
-```bash
-# Create the default directory (Linux/macOS)
-mkdir -p ~/.local/share/docs-mcp
-
-# Create the default directory (Windows PowerShell)
+**Windows (PowerShell):**
+```powershell
+uv tool install https://github.com/jcdoll/htmlDocsRAG.git
 mkdir -Force "$env:LOCALAPPDATA\docs-mcp"
-
-# Download a pre-built database
-curl -L https://github.com/jcdoll/htmlDocsRAG/releases/latest/download/comsol.db -o ~/.local/share/docs-mcp/comsol.db
-
-# Verify it works
-docs-mcp --db comsol.db --test "boundary conditions"
+Invoke-WebRequest -Uri "https://github.com/jcdoll/htmlDocsRAG/releases/latest/download/comsol.db" -OutFile "$env:LOCALAPPDATA\docs-mcp\comsol.db"
+docs-mcp --db comsol.db --test "mesh refinement"
 ```
 
-### Creating a Release
+**Configure your IDE:**
+```bash
+# Claude Code
+claude mcp add --transport stdio comsol-docs -- docs-mcp --db comsol.db
+mkdir -p ~/.claude/skills && curl -L https://raw.githubusercontent.com/jcdoll/htmlDocsRAG/main/.claude/skills/comsol-docs.md -o ~/.claude/skills/comsol-docs.md
 
-To publish a database for others to use:
+# Codex CLI
+codex mcp add comsol-docs "docs-mcp --db comsol.db"
+mkdir -p ~/.codex/skills && curl -L https://raw.githubusercontent.com/jcdoll/htmlDocsRAG/main/.codex/skills/comsol-docs.md -o ~/.codex/skills/comsol-docs.md
+
+# Cursor - add to ~/.cursor/mcp.json (see IDE Configuration below)
+```
+
+## Quick Start (Build Your Own)
 
 ```bash
-# Create a dated release with the database attached
-gh release create 2025-12-21 db/comsol.db --title "Comsol 6.4 docs (2025-12-21)" --notes "Pre-built database with embeddings (MEMS + CAD Import + Design + Livelink)"
-
-# Or upload to an existing release
-gh release upload 2025-12-21 db/comsol.db --clobber
+git clone https://github.com/jcdoll/htmlDocsRAG.git && cd htmlDocsRAG
+uv sync
+./scripts/convert_html.sh /path/to/html/docs ./markdown
+uv run python build_index.py ./markdown --output db/docs.db --no-embeddings
+uv run python mcp_server.py --db db/docs.db --test "your query"
+uv run python build_index.py ./markdown --output db/docs.db
+uv tool install .
 ```
 
-### Distributing Databases
-
-1. GitHub Releases (recommended for public projects)
-   - Build the database with embeddings
-   - Create a release with `gh release create`
-   - Users download via `curl` or browser
-
-2. Cloud Storage (for teams)
-   - Upload to S3, Google Drive, Dropbox, etc.
-   - Share download links with your team
-
-3. Direct Copy (for local use)
-   - Copy the `.db` file to the user's default directory
-
-Database files are typically 50–250 MB depending on documentation size and whether embeddings are included.
+For COMSOL-specific conversion, see [docs/comsol.md](docs/comsol.md).
 
 ## IDE Configuration
 
-### With Tool Installation (Recommended)
-
-After installing as a tool, IDE configuration is simple—no `cwd` needed.
-
-If your database is in the default directory (`~/.local/share/docs-mcp/` or `%LOCALAPPDATA%\docs-mcp\`), you can use just the filename:
-
+**Cursor/Other IDEs** - add to `~/.cursor/mcp.json` (or equivalent):
 ```json
 {
   "mcpServers": {
@@ -355,263 +67,27 @@ If your database is in the default directory (`~/.local/share/docs-mcp/` or `%LO
 }
 ```
 
-Otherwise, use the full path:
+Database files in `~/.local/share/docs-mcp/` (Linux/macOS) or `%LOCALAPPDATA%\docs-mcp\` (Windows) can be referenced by name only.
 
-```json
-{
-  "mcpServers": {
-    "comsol-docs": {
-      "command": "docs-mcp",
-      "args": ["--db", "/absolute/path/to/comsol.db"]
-    }
-  }
-}
-```
+## MCP Tools
 
-#### Claude Code
+| Tool | Description |
+|------|-------------|
+| `search_docs` | Hybrid keyword + semantic search. Returns matching chunks with scores. |
+| `get_chunk` | Retrieve a specific chunk by ID. |
+| `list_sources` | List all indexed source files. |
+
+## Publishing Databases
 
 ```bash
-claude mcp add --transport stdio comsol-docs -- docs-mcp --db comsol.db
+gh release create 2025-12-21 db/comsol.db --title "Comsol 6.4 docs" --notes "Pre-built database with embeddings"
 ```
 
-Or edit `~/.claude/settings.json` with the JSON above.
-
-#### Cursor
-
-Edit `~/.cursor/mcp.json` with the JSON above.
-
-#### Codex CLI
-
-```bash
-codex mcp add comsol-docs "docs-mcp --db comsol.db"
-```
-
-### Without Tool Installation
-
-If you prefer not to install globally, use `uv run` with `cwd`:
-
-```json
-{
-  "mcpServers": {
-    "comsol-docs": {
-      "command": "uv",
-      "args": ["run", "python", "mcp_server.py", "--db", "db/comsol.db"],
-      "cwd": "/absolute/path/to/htmlDocsRAG"
-    }
-  }
-}
-```
-
-### Deployment Options Comparison
-
-| Approach | Pros | Cons |
-|----------|------|------|
-| `uv tool install` | Clean global binary, simple config | Reinstall on updates |
-| `pipx install` | Same as uv tool | Slightly slower |
-| `uv run` in project dir | No install step | Requires cwd, verbose config |
-| Docker | Fully isolated | Overkill, slow startup |
-
-### Notes
-
-- Use absolute paths for the database file
-- Restart the IDE after changing MCP configuration
-- The server name (e.g., `comsol-docs`) can be anything descriptive
-
-## MCP Tools Exposed
-
-### `search_docs`
-
-Hybrid keyword + semantic search.
-
-Parameters:
-- `query` (string, required): Search query
-- `limit` (integer, default 10): Max results to return
-- `mode` (string, default "hybrid"): One of "keyword", "semantic", or "hybrid"
-
-Returns: Array of objects with `chunk_id`, `source`, `title`, `content`, `score`
-
-Example:
-```json
-{
-  "query": "mesh refinement convergence",
-  "limit": 5,
-  "mode": "hybrid"
-}
-```
-
-### `get_chunk`
-
-Retrieve a specific chunk by ID (for follow-up after search).
-
-Parameters:
-- `chunk_id` (string, required): The chunk identifier
-
-Returns: Object with full chunk content and metadata
-
-### `list_sources`
-
-List all indexed source files.
-
-Returns: Array of source paths with chunk counts
-
-## Search Behavior
-
-### Hybrid Search (default)
-
-Combines FTS5 keyword matching with vector similarity using Reciprocal Rank Fusion (RRF):
-
-```
-score = Σ 1/(k + rank_i)
-```
-
-Where `k=60` (standard RRF constant) and `rank_i` is the rank from each method.
-
-This surfaces results that match either exact terms OR semantic meaning, with results appearing in both ranked highest.
-
-### Keyword-Only Mode
-
-Uses SQLite FTS5 with BM25 ranking. Best for:
-- API names and symbols
-- Error messages
-- Exact phrase matching
-
-### Semantic-Only Mode
-
-Uses cosine similarity on embeddings. Handles vocabulary mismatch:
-- "make grid finer near edges" → finds "mesh refinement"
-- "simulation stuck" → finds convergence, solver tolerance
-- "how do I set up walls" → finds boundary conditions
-
-Essential for users who don't know exact terminology.
-
-### Example Search Commands
-
-Test search from the command line:
-
-```bash
-# Keyword search (exact terms)
-uv run python mcp_server.py --db db/comsol.db --test "mesh refinement"
-uv run python mcp_server.py --db db/comsol.db --test "boundary conditions"
-uv run python mcp_server.py --db db/comsol.db --test "convergence error"
-
-# Semantic search (natural language - finds relevant docs even without exact terms)
-uv run python mcp_server.py --db db/comsol.db --test "make the grid finer near edges"
-uv run python mcp_server.py --db db/comsol.db --test "simulation not finishing"
-uv run python mcp_server.py --db db/comsol.db --test "how to set up walls in fluid flow"
-
-# Force specific search mode
-uv run python mcp_server.py --db db/comsol.db --test "MUMPS solver" --mode keyword
-uv run python mcp_server.py --db db/comsol.db --test "physics won't solve" --mode semantic
-```
-
-## Database Schema
-
-```sql
--- Document chunks with metadata
-CREATE TABLE chunks (
-    id TEXT PRIMARY KEY,
-    source TEXT NOT NULL,          -- Original file path
-    title TEXT,                    -- Extracted section title
-    content TEXT NOT NULL,         -- Chunk text
-    chunk_index INTEGER,           -- Position within source
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- FTS5 full-text index
-CREATE VIRTUAL TABLE chunks_fts USING fts5(
-    content,
-    title,
-    content=chunks,
-    content_rowid=rowid
-);
-
--- Vector embeddings (via sqlite-vec)
-CREATE VIRTUAL TABLE chunks_vec USING vec0(
-    embedding float[384]           -- Dimension matches model
-);
-
--- Source file tracking for incremental updates
-CREATE TABLE sources (
-    path TEXT PRIMARY KEY,
-    hash TEXT NOT NULL,
-    indexed_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-```
-
-## Chunking Strategy
-
-Documents are split using a header-aware algorithm:
-
-1. Primary split: Markdown headers (`##`, `###`, etc.)
-2. Secondary split: If a section exceeds `chunk_size`, split on paragraph boundaries
-3. Tertiary split: If still too large, split on sentence boundaries
-4. Overlap: Each chunk includes `chunk_overlap` characters from the previous chunk's end
-
-Section titles are preserved as metadata for better context in search results.
-
-## Maintenance
-
-### When Documentation Updates
-
-```bash
-# Re-convert changed HTML files
-./scripts/convert_html.sh /path/to/html ./markdown
-
-# Rebuild index with embeddings (incremental—skips unchanged files)
-uv run python build_index.py ./markdown --output db/docs.db
-
-# Restart MCP server (or it picks up changes on next query)
-```
-
-### Validation
-
-```bash
-# Check database integrity
-uv run python -c "
-import sqlite3
-conn = sqlite3.connect('db/docs.db')
-print(f'Chunks: {conn.execute(\"SELECT COUNT(*) FROM chunks\").fetchone()[0]}')
-print(f'Sources: {conn.execute(\"SELECT COUNT(*) FROM sources\").fetchone()[0]}')
-"
-
-# Test search from command line
-uv run python mcp_server.py --db db/docs.db --test "boundary conditions"
-```
-
-## Troubleshooting
-
-### "sqlite-vec extension not found"
-
-sqlite-vec requires compilation on some platforms. Try:
-
-```bash
-# Usually works via pip
-uv add sqlite-vec --reinstall
-
-# If that fails on macOS
-brew install sqlite
-uv add sqlite-vec --reinstall
-```
-
-### "No results for queries that should match"
-
-1. Check the content was indexed: `SELECT COUNT(*) FROM chunks WHERE content LIKE '%yourterm%'`
-2. FTS5 tokenization may differ from your expectation. Try simpler queries.
-3. For code symbols, ensure they weren't stripped during HTML→Markdown conversion.
-
-### "MCP server not connecting"
-
-1. Test manually: `uv run python mcp_server.py --db db/docs.db` should start without errors
-2. Check paths in IDE config are absolute
-3. Check `cwd` is set correctly
-4. Look at IDE's MCP debug logs
-
-### Slow indexing
-
-Embedding generation is the bottleneck (~5 min for 10k chunks). Options:
-- Use `--no-embeddings` for initial testing, then rebuild with embeddings
-- Use a smaller model (trades accuracy for speed)
-- Run on a machine with GPU (sentence-transformers auto-detects CUDA)
+## Documentation
+
+- [COMSOL-specific setup](docs/comsol.md)
+- [Development guide](docs/development.md) - schema, chunking, build options
+- [Troubleshooting](docs/troubleshooting.md)
 
 ## License
 
