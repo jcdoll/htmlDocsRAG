@@ -12,12 +12,12 @@ Local documentation retrieval system using MCP (Model Context Protocol). Indexes
 HTML docs → pandoc → Markdown → build_index.py → SQLite DB → mcp_server.py → MCP tools
 ```
 
-**Key files:**
+Key files:
 - `build_index.py` — Indexes Markdown into SQLite (FTS5 + optional sqlite-vec embeddings)
 - `mcp_server.py` — MCP server exposing `search_docs`, `get_chunk`, `list_sources` tools
 - `scripts/convert_html.sh` — Batch HTML→Markdown conversion via pandoc
 
-**Database schema:**
+Database schema:
 - `chunks` — Document chunks with id, source, title, content, chunk_index
 - `chunks_fts` — FTS5 virtual table for keyword search
 - `chunks_vec` — sqlite-vec virtual table for embeddings (optional)

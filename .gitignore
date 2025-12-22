@@ -1,6 +1,7 @@
 # This project
 markdown/
 db/
+nul
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

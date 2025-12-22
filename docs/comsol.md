@@ -12,8 +12,9 @@ When installing COMSOL, select:
 
 COMSOL 6.4 HTML documentation default paths:
 
-- **Windows:** `C:\Program Files\COMSOL\COMSOL64\Multiphysics\doc\help\wtpwebapps\ROOT\doc\`
-- **Linux:** `/usr/local/comsol/multiphysics/doc/help/wtpwebapps/ROOT/doc`
+- Windows: `C:\Program Files\COMSOL\COMSOL64\Multiphysics\doc\help\wtpwebapps\ROOT\doc\`
+- macOS: `/Applications/COMSOL64/Multiphysics/doc/help/wtpwebapps/ROOT/doc/`
+- Linux: `/usr/local/comsol/multiphysics/doc/help/wtpwebapps/ROOT/doc/`
 
 The HTML files are spread across subdirectories (`comsol_ref_manual/`, `acdc_module/`, etc.).
 

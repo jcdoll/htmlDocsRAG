@@ -2,6 +2,14 @@
 
 Make engineering documentation searchable by LLM coding assistants (Claude Code, Cursor, Codex CLI). Uses SQLite FTS5 for keyword search and vector embeddings for semantic search. Single file, no external services.
 
+## Why This Architecture
+
+Hybrid search gives you the best of both worlds. FTS5 handles exact matches—API names, error messages, symbols. Embeddings handle vocabulary mismatch—when someone searches "make grid finer near edges" instead of "mesh refinement."
+
+SQLite FTS5 + sqlite-vec keeps everything in one file. No vector database to operate, no Docker, no external services.
+
+What this replaces: grep (no ranking), Qdrant/Weaviate (operational overhead), local LLMs (slow, no accuracy benefit for retrieval).
+
 ## Requirements
 
 - Python 3.11+
@@ -72,13 +80,24 @@ For COMSOL-specific conversion, see [docs/comsol.md](docs/comsol.md). You can ad
 
 ## MCP Tools
 
-There are a few key MCP commands for the LLM.
-
 | Tool | Description |
 |------|-------------|
 | `search_docs` | Hybrid keyword + semantic search. Returns matching chunks with scores. |
 | `get_chunk` | Retrieve a specific chunk by ID. |
 | `list_sources` | List all indexed source files. |
+
+Example `search_docs` response:
+```json
+[
+  {
+    "chunk_id": "comsol_ref_mesh.24.80.md:0",
+    "source": "comsol_ref_mesh.24.80.md",
+    "title": "Mesh Refinement",
+    "content": "Use Refine to refine a mesh by splitting elements...",
+    "score": 0.032
+  }
+]
+```
 
 ## Publishing Databases
 

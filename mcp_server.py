@@ -26,6 +26,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
+# Valid search modes for search_docs
+VALID_SEARCH_MODES = ("keyword", "semantic", "hybrid")
+
 
 def get_data_dir() -> Path:
     """Get the default data directory for database files."""
@@ -89,24 +92,60 @@ def get_embedding_model():
     return _embedding_model
 
 
+def sanitize_fts_query(query: str) -> str:
+    """
+    Sanitize a query string for safe use with FTS5 MATCH.
+
+    FTS5 has special syntax (AND, OR, NOT, quotes, parentheses, etc.)
+    that can cause errors or unexpected behavior. This wraps each word
+    in quotes to treat them as literals.
+    """
+    # Split on whitespace and filter empty tokens
+    tokens = query.split()
+    if not tokens:
+        return ""
+
+    # Escape double quotes within tokens and wrap each in quotes
+    # This treats each word as a literal phrase, joined by implicit AND
+    escaped = []
+    for token in tokens:
+        # Escape any existing double quotes
+        safe_token = token.replace('"', '""')
+        escaped.append(f'"{safe_token}"')
+
+    return " ".join(escaped)
+
+
 def search_fts(query: str, limit: int) -> list[tuple[str, float]]:
     """Full-text search using FTS5. Returns (chunk_id, score) pairs."""
+    # Handle empty or whitespace-only queries
+    if not query or not query.strip():
+        return []
+
     conn = get_connection()
 
-    # BM25 scoring (lower is better in FTS5, so we negate)
-    results = conn.execute(
-        """
-        SELECT c.id, -bm25(chunks_fts, 1, 10) as score
-        FROM chunks_fts
-        JOIN chunks c ON chunks_fts.rowid = c.rowid
-        WHERE chunks_fts MATCH ?
-        ORDER BY score DESC
-        LIMIT ?
-    """,
-        (query, limit),
-    ).fetchall()
+    # Sanitize query to prevent FTS5 syntax errors
+    safe_query = sanitize_fts_query(query)
+    if not safe_query:
+        return []
 
-    return results
+    try:
+        # BM25 scoring (lower is better in FTS5, so we negate)
+        results = conn.execute(
+            """
+            SELECT c.id, -bm25(chunks_fts, 1, 10) as score
+            FROM chunks_fts
+            JOIN chunks c ON chunks_fts.rowid = c.rowid
+            WHERE chunks_fts MATCH ?
+            ORDER BY score DESC
+            LIMIT ?
+        """,
+            (safe_query, limit),
+        ).fetchall()
+        return results
+    except sqlite3.OperationalError as e:
+        logger.warning(f"FTS5 search error: {e}")
+        return []
 
 
 def search_vec(query: str, limit: int) -> list[tuple[str, float]]:
@@ -147,6 +186,16 @@ def reciprocal_rank_fusion(
     Combine multiple ranked lists using Reciprocal Rank Fusion.
 
     RRF score = sum(1 / (k + rank_i)) for each list where item appears
+
+    Args:
+        results_lists: List of ranked result lists, each containing (id, score) tuples
+        k: Ranking constant that controls how much weight is given to lower-ranked items.
+           Default of 60 is from the original RRF paper (Cormack et al., 2009) and works
+           well in practice. Lower k gives more weight to top results; higher k makes
+           the ranking more uniform.
+
+    Returns:
+        Combined list of (id, rrf_score) tuples, sorted by score descending
     """
     scores: dict[str, float] = {}
 
@@ -204,7 +253,13 @@ def search_docs_impl(query: str, limit: int = 10, mode: str = "hybrid") -> list[
 
     Returns:
         List of matching chunks with scores
+
+    Raises:
+        ValueError: If mode is not one of the valid search modes
     """
+    if mode not in VALID_SEARCH_MODES:
+        raise ValueError(f"Invalid search mode '{mode}'. Must be one of: {VALID_SEARCH_MODES}")
+
     results_lists = []
 
     if mode in ("keyword", "hybrid"):

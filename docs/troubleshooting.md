@@ -46,3 +46,42 @@ The embedding model loads on first semantic search. This is a one-time cost per 
 ```bash
 docs-mcp --db comsol.db --test "query" --mode keyword
 ```
+
+## Windows-specific issues
+
+### "Database is locked" or temp file errors
+
+SQLite WAL mode can cause file locking issues on Windows. The server handles this automatically, but if you see errors:
+
+1. Close any other programs accessing the database
+2. Delete `.db-wal` and `.db-shm` files if present
+3. Restart the MCP server
+
+### NPX commands fail with "Connection closed"
+
+On native Windows (not WSL), wrap NPX commands with `cmd /c`:
+
+```powershell
+# Instead of: npx -y some-package
+cmd /c npx -y some-package
+```
+
+### Path issues
+
+Always use forward slashes or escaped backslashes in config files:
+
+```json
+{
+  "args": ["--db", "C:/Users/name/docs-mcp/comsol.db"]
+}
+```
+
+Or use environment variables:
+
+```json
+{
+  "args": ["--db", "comsol.db"]
+}
+```
+
+(Database files in `%LOCALAPPDATA%\docs-mcp\` are found automatically.)

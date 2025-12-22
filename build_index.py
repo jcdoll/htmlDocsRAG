@@ -400,7 +400,8 @@ def main():
     for i, md_path in enumerate(md_files):
         # Check if file has changed
         current_hash = file_hash(md_path)
-        relative_path = str(md_path.relative_to(args.source_dir))
+        # Normalize path separators for cross-platform consistency
+        relative_path = str(md_path.relative_to(args.source_dir)).replace("\\", "/")
 
         existing = conn.execute(
             "SELECT hash FROM sources WHERE path = ?", (relative_path,)

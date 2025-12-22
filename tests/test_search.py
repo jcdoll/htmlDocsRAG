@@ -9,6 +9,7 @@ from mcp_server import (
     get_chunk_impl,
     init_db,
     list_sources_impl,
+    sanitize_fts_query,
     search_docs_impl,
     search_fts,
 )
@@ -62,6 +63,14 @@ class TestSearchDocsImpl:
         assert all("chunk_id" in r for r in results)
         assert all("content" in r for r in results)
         assert all("score" in r for r in results)
+
+    def test_invalid_mode_raises_error(self, populated_db: Path):
+        init_db(populated_db)
+
+        import pytest
+
+        with pytest.raises(ValueError, match="Invalid search mode"):
+            search_docs_impl("test", limit=5, mode="invalid_mode")
 
     def test_hybrid_mode_fallback_to_keyword(self, populated_db: Path):
         # When no embeddings exist, hybrid should fall back to keyword
@@ -194,3 +203,85 @@ class TestSearchScoring:
         results = search_docs_impl("content", limit=10, mode="keyword")
 
         assert all(r["score"] > 0 for r in results)
+
+
+class TestSanitizeFtsQuery:
+    """Tests for FTS5 query sanitization."""
+
+    def test_simple_query(self):
+        result = sanitize_fts_query("hello world")
+        assert result == '"hello" "world"'
+
+    def test_empty_query(self):
+        assert sanitize_fts_query("") == ""
+        assert sanitize_fts_query("   ") == ""
+
+    def test_escapes_quotes(self):
+        result = sanitize_fts_query('hello "world"')
+        assert result == '"hello" """world"""'
+
+    def test_handles_special_fts_operators(self):
+        # These should be wrapped in quotes to be treated as literals
+        result = sanitize_fts_query("AND OR NOT")
+        assert result == '"AND" "OR" "NOT"'
+
+    def test_handles_parentheses(self):
+        result = sanitize_fts_query("(test)")
+        assert result == '"(test)"'
+
+    def test_handles_asterisk(self):
+        result = sanitize_fts_query("test*")
+        assert result == '"test*"'
+
+    def test_handles_minus(self):
+        result = sanitize_fts_query("-exclude")
+        assert result == '"-exclude"'
+
+
+class TestSearchEdgeCases:
+    """Tests for search edge cases and error handling."""
+
+    def test_empty_query_returns_empty(self, populated_db: Path):
+        init_db(populated_db)
+
+        results = search_fts("", limit=10)
+        assert results == []
+
+    def test_whitespace_query_returns_empty(self, populated_db: Path):
+        init_db(populated_db)
+
+        results = search_fts("   ", limit=10)
+        assert results == []
+
+    def test_special_characters_dont_crash(self, populated_db: Path):
+        init_db(populated_db)
+
+        # These should not raise exceptions
+        queries = [
+            '"unclosed quote',
+            "AND",
+            "OR",
+            "(unbalanced",
+            "test*",
+            "-negation",
+            "NEAR/5",
+            '"hello" AND "world"',
+        ]
+        for query in queries:
+            results = search_fts(query, limit=10)
+            assert isinstance(results, list)
+
+    def test_unicode_query(self, populated_db: Path):
+        init_db(populated_db)
+
+        # Unicode should not crash
+        results = search_fts("日本語 emoji 🎉", limit=10)
+        assert isinstance(results, list)
+
+    def test_very_long_query(self, populated_db: Path):
+        init_db(populated_db)
+
+        # Very long query should not crash
+        long_query = "word " * 1000
+        results = search_fts(long_query, limit=10)
+        assert isinstance(results, list)
