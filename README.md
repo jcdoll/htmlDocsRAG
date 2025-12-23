@@ -121,6 +121,8 @@ For COMSOL-specific conversion, see [docs/comsol.md](docs/comsol.md). You can ad
 | `get_context` | Get a chunk with surrounding chunks from the same file for more context. |
 | `get_source` | Get all chunks from a source file to read the full document. |
 | `list_sources` | List all indexed source files with chunk counts. |
+| `list_modules` | List modules/products with file counts for discovering available content. |
+| `search_sources` | Search source paths by substring to find relevant files. |
 | `list_sections` | List all section titles in a source file for quick navigation. |
 | `get_chunk_by_title` | Get all chunks with a specific title from a source file. |
 | `search_symbols` | Search for API/function symbols by prefix (e.g., "mph"). |

@@ -19,10 +19,12 @@ from db import (
     get_source,
     init_db,
     list_databases,
+    list_modules,
     list_sections,
     list_sources,
     resolve_db_path,
     search_docs,
+    search_sources,
     search_symbols,
     set_model_name,
 )
@@ -69,6 +71,23 @@ def create_server() -> Server:
                 name="list_sources",
                 description=f"List indexed {name} sources",
                 inputSchema={"type": "object", "properties": {}},
+            ),
+            Tool(
+                name="list_modules",
+                description=f"List {name} modules/products with file counts",
+                inputSchema={"type": "object", "properties": {}},
+            ),
+            Tool(
+                name="search_sources",
+                description=f"Search {name} source paths by substring",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "pattern": {"type": "string", "description": "Substring to match"},
+                        "limit": {"type": "integer", "default": 50},
+                    },
+                    "required": ["pattern"],
+                },
             ),
             Tool(
                 name="get_context",
@@ -144,6 +163,10 @@ def create_server() -> Server:
             ),
             "get_chunk": lambda: get_chunk(arguments["chunk_id"]) or "Chunk not found",
             "list_sources": list_sources,
+            "list_modules": list_modules,
+            "search_sources": lambda: search_sources(
+                arguments["pattern"], arguments.get("limit", 50)
+            ),
             "get_context": lambda: get_context(
                 arguments["chunk_id"], arguments.get("before", 1), arguments.get("after", 1)
             ),

@@ -256,6 +256,42 @@ def list_sources() -> list[dict]:
     return [{"path": r[0], "chunk_count": r[1]} for r in rows]
 
 
+def list_modules() -> list[dict]:
+    """List unique source path prefixes (modules/products) with file counts."""
+    rows = (
+        get_connection()
+        .execute(
+            """SELECT
+                 CASE WHEN INSTR(source, '\\') > 0
+                      THEN SUBSTR(source, 1, INSTR(source, '\\') - 1)
+                      WHEN INSTR(source, '/') > 0
+                      THEN SUBSTR(source, 1, INSTR(source, '/') - 1)
+                      ELSE source END as module,
+                 COUNT(DISTINCT source) as file_count,
+                 COUNT(*) as chunk_count
+               FROM chunks GROUP BY module ORDER BY module"""
+        )
+        .fetchall()
+    )
+    return [{"module": r[0], "file_count": r[1], "chunk_count": r[2]} for r in rows]
+
+
+def search_sources(pattern: str, limit: int = 50) -> list[dict]:
+    """Search source paths by substring pattern."""
+    if not pattern or not pattern.strip():
+        return []
+    rows = (
+        get_connection()
+        .execute(
+            """SELECT source, COUNT(*) as chunk_count FROM chunks
+               WHERE source LIKE ? GROUP BY source ORDER BY source LIMIT ?""",
+            (f"%{pattern}%", limit),
+        )
+        .fetchall()
+    )
+    return [{"path": r[0], "chunk_count": r[1]} for r in rows]
+
+
 def get_context(chunk_id: str, before: int = 1, after: int = 1) -> dict:
     """Get a chunk with surrounding context from the same source file."""
     conn = get_connection()
