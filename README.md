@@ -46,9 +46,13 @@ claude mcp add --transport stdio comsol-docs -- docs-mcp --db ~/.local/share/doc
 mkdir -p ~/.claude/skills && curl -L https://raw.githubusercontent.com/jcdoll/htmlDocsRAG/main/.claude/skills/comsol-docs.md -o ~/.claude/skills/comsol-docs.md
 ```
 
-Codex CLI:
+Codex CLI: add to `~/.codex/config.toml`:
+```toml
+[mcp_servers.comsol-docs]
+command = "docs-mcp"
+args = ["--db", "comsol.db"]
+```
 ```bash
-codex mcp add comsol-docs "docs-mcp --db ~/.local/share/docs-mcp/comsol.db"
 mkdir -p ~/.codex/skills && curl -L https://raw.githubusercontent.com/jcdoll/htmlDocsRAG/main/.codex/skills/comsol-docs.md -o ~/.codex/skills/comsol-docs.md
 ```
 
@@ -72,9 +76,13 @@ claude mcp add --transport stdio comsol-docs -- docs-mcp --db "$env:LOCALAPPDATA
 mkdir -Force "$env:USERPROFILE\.claude\skills"; Invoke-WebRequest -Uri "https://raw.githubusercontent.com/jcdoll/htmlDocsRAG/main/.claude/skills/comsol-docs.md" -OutFile "$env:USERPROFILE\.claude\skills\comsol-docs.md"
 ```
 
-Codex CLI (PowerShell):
+Codex CLI: add to `%USERPROFILE%\.codex\config.toml`:
+```toml
+[mcp_servers.comsol-docs]
+command = "docs-mcp"
+args = ["--db", "comsol.db"]
+```
 ```powershell
-codex mcp add comsol-docs "docs-mcp --db $env:LOCALAPPDATA\docs-mcp\comsol.db"
 mkdir -Force "$env:USERPROFILE\.codex\skills"; Invoke-WebRequest -Uri "https://raw.githubusercontent.com/jcdoll/htmlDocsRAG/main/.codex/skills/comsol-docs.md" -OutFile "$env:USERPROFILE\.codex\skills\comsol-docs.md"
 ```
 
