@@ -42,8 +42,8 @@ You next need to plug it into your favorite IDE. There are two steps: MCP server
 
 Claude Code:
 ```bash
-claude mcp add --transport stdio comsol-docs -- docs-mcp --db ~/.local/share/docs-mcp/comsol.db
-mkdir -p ~/.claude/skills && curl -L https://raw.githubusercontent.com/jcdoll/htmlDocsRAG/main/.claude/skills/comsol-docs.md -o ~/.claude/skills/comsol-docs.md
+claude mcp add --transport stdio comsol-docs -- docs-mcp --db comsol.db
+mkdir -p ~/.claude/skills/comsol-docs && curl -L https://raw.githubusercontent.com/jcdoll/htmlDocsRAG/main/.claude/skills/comsol-docs/SKILL.md -o ~/.claude/skills/comsol-docs/SKILL.md
 ```
 
 Codex CLI: add to `~/.codex/config.toml`:
@@ -70,10 +70,10 @@ Cursor: add to `~/.cursor/mcp.json`:
 
 ### Windows
 
-Claude Code (PowerShell):
+Claude Code:
 ```powershell
-claude mcp add --transport stdio comsol-docs -- docs-mcp --db "$env:LOCALAPPDATA\docs-mcp\comsol.db"
-mkdir -Force "$env:USERPROFILE\.claude\skills"; Invoke-WebRequest -Uri "https://raw.githubusercontent.com/jcdoll/htmlDocsRAG/main/.claude/skills/comsol-docs.md" -OutFile "$env:USERPROFILE\.claude\skills\comsol-docs.md"
+claude mcp add --transport stdio comsol-docs -- docs-mcp --db comsol.db
+mkdir -Force "$env:USERPROFILE\.claude\skills\comsol-docs"; Invoke-WebRequest -Uri "https://raw.githubusercontent.com/jcdoll/htmlDocsRAG/main/.claude/skills/comsol-docs/SKILL.md" -OutFile "$env:USERPROFILE\.claude\skills\comsol-docs\SKILL.md"
 ```
 
 Codex CLI: add to `%USERPROFILE%\.codex\config.toml`:
