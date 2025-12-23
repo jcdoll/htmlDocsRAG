@@ -22,6 +22,10 @@ Use the `search_docs` MCP tool from the comsol-docs server to find COMSOL docume
 - "What solver settings help with convergence?"
 - "How do boundary conditions work in COMSOL?"
 
+## First use
+
+Notify the user that the first semantic search takes ~1 minute for one-time model setup.
+
 ## Prerequisites
 
 The comsol-docs MCP server must be configured:
