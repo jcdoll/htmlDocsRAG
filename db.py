@@ -169,6 +169,54 @@ def reciprocal_rank_fusion(
 # --- Query functions ---
 
 
+def get_stats() -> dict:
+    """Get database statistics."""
+    conn = get_connection()
+    chunks = conn.execute("SELECT COUNT(*) FROM chunks").fetchone()[0]
+    sources = conn.execute("SELECT COUNT(DISTINCT source) FROM chunks").fetchone()[0]
+    modules = conn.execute(
+        """SELECT COUNT(DISTINCT
+             CASE WHEN INSTR(source, '\\') > 0
+                  THEN SUBSTR(source, 1, INSTR(source, '\\') - 1)
+                  WHEN INSTR(source, '/') > 0
+                  THEN SUBSTR(source, 1, INSTR(source, '/') - 1)
+                  ELSE source END) FROM chunks"""
+    ).fetchone()[0]
+    has_embeddings = False
+    if _has_vec:
+        try:
+            has_embeddings = conn.execute("SELECT COUNT(*) FROM chunks_vec").fetchone()[0] > 0
+        except sqlite3.OperationalError:
+            pass  # Table doesn't exist
+    return {
+        "total_chunks": chunks,
+        "total_sources": sources,
+        "total_modules": modules,
+        "has_embeddings": has_embeddings,
+        "database": _db_name,
+    }
+
+
+def search_titles(pattern: str, limit: int = 50) -> list[dict]:
+    """Search section titles across all sources."""
+    if not pattern or not pattern.strip():
+        return []
+    rows = (
+        get_connection()
+        .execute(
+            """SELECT title, source, MIN(id) as chunk_id, COUNT(*) as chunk_count
+               FROM chunks WHERE title LIKE ?
+               GROUP BY title, source ORDER BY title LIMIT ?""",
+            (f"%{pattern}%", limit),
+        )
+        .fetchall()
+    )
+    return [
+        {"title": r[0], "source": r[1], "chunk_id": r[2], "chunk_count": r[3]}
+        for r in rows
+    ]
+
+
 def search_docs(
     query: str, limit: int = 10, mode: str = "hybrid", source_filter: str | None = None
 ) -> list[dict]:

@@ -17,6 +17,7 @@ from db import (
     get_data_dir,
     get_db_name,
     get_source,
+    get_stats,
     init_db,
     list_databases,
     list_modules,
@@ -26,6 +27,7 @@ from db import (
     search_docs,
     search_sources,
     search_symbols,
+    search_titles,
     set_model_name,
 )
 
@@ -57,6 +59,11 @@ def create_server() -> Server:
                     },
                     "required": ["query"],
                 },
+            ),
+            Tool(
+                name="get_stats",
+                description=f"Get {name} database statistics",
+                inputSchema={"type": "object", "properties": {}},
             ),
             Tool(
                 name="get_chunk",
@@ -148,6 +155,18 @@ def create_server() -> Server:
                     "required": ["prefix"],
                 },
             ),
+            Tool(
+                name="search_titles",
+                description=f"Search section titles across all {name} sources",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "pattern": {"type": "string", "description": "Substring to match"},
+                        "limit": {"type": "integer", "default": 50},
+                    },
+                    "required": ["pattern"],
+                },
+            ),
         ]
 
     @server.call_tool()
@@ -161,6 +180,7 @@ def create_server() -> Server:
                 arguments.get("mode", "hybrid"),
                 arguments.get("source_filter"),
             ),
+            "get_stats": get_stats,
             "get_chunk": lambda: get_chunk(arguments["chunk_id"]) or "Chunk not found",
             "list_sources": list_sources,
             "list_modules": list_modules,
@@ -179,6 +199,9 @@ def create_server() -> Server:
             ),
             "search_symbols": lambda: search_symbols(
                 arguments["prefix"], arguments.get("limit", 50)
+            ),
+            "search_titles": lambda: search_titles(
+                arguments["pattern"], arguments.get("limit", 50)
             ),
         }
         result = handlers[name]() if name in handlers else f"Unknown tool: {name}"
