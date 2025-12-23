@@ -12,15 +12,18 @@ from mcp.types import TextContent, Tool
 
 from db import (
     get_chunk,
+    get_chunk_by_title,
     get_context,
     get_data_dir,
     get_db_name,
     get_source,
     init_db,
     list_databases,
+    list_sections,
     list_sources,
     resolve_db_path,
     search_docs,
+    search_symbols,
     set_model_name,
 )
 
@@ -45,6 +48,10 @@ def create_server() -> Server:
                         "query": {"type": "string", "description": "Search query"},
                         "limit": {"type": "integer", "default": 10},
                         "mode": {"type": "string", "enum": ["keyword", "semantic", "hybrid"]},
+                        "source_filter": {
+                            "type": "string",
+                            "description": "Filter by source path substring (e.g., 'llmatlab')",
+                        },
                     },
                     "required": ["query"],
                 },
@@ -89,6 +96,39 @@ def create_server() -> Server:
                     "required": ["source_path"],
                 },
             ),
+            Tool(
+                name="list_sections",
+                description=f"List all section titles in a {name} source file",
+                inputSchema={
+                    "type": "object",
+                    "properties": {"source_path": {"type": "string"}},
+                    "required": ["source_path"],
+                },
+            ),
+            Tool(
+                name="get_chunk_by_title",
+                description=f"Get all chunks with a specific title from a {name} source file",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "source_path": {"type": "string"},
+                        "title": {"type": "string", "description": "Section title to retrieve"},
+                    },
+                    "required": ["source_path", "title"],
+                },
+            ),
+            Tool(
+                name="search_symbols",
+                description=f"Search for API/function symbols by prefix in {name} docs",
+                inputSchema={
+                    "type": "object",
+                    "properties": {
+                        "prefix": {"type": "string", "description": "Symbol prefix (e.g., 'mph')"},
+                        "limit": {"type": "integer", "default": 50},
+                    },
+                    "required": ["prefix"],
+                },
+            ),
         ]
 
     @server.call_tool()
@@ -97,7 +137,10 @@ def create_server() -> Server:
 
         handlers = {
             "search_docs": lambda: search_docs(
-                arguments["query"], arguments.get("limit", 10), arguments.get("mode", "hybrid")
+                arguments["query"],
+                arguments.get("limit", 10),
+                arguments.get("mode", "hybrid"),
+                arguments.get("source_filter"),
             ),
             "get_chunk": lambda: get_chunk(arguments["chunk_id"]) or "Chunk not found",
             "list_sources": list_sources,
@@ -106,6 +149,13 @@ def create_server() -> Server:
             ),
             "get_source": lambda: get_source(
                 arguments["source_path"], arguments.get("offset", 0), arguments.get("limit")
+            ),
+            "list_sections": lambda: list_sections(arguments["source_path"]),
+            "get_chunk_by_title": lambda: get_chunk_by_title(
+                arguments["source_path"], arguments["title"]
+            ),
+            "search_symbols": lambda: search_symbols(
+                arguments["prefix"], arguments.get("limit", 50)
             ),
         }
         result = handlers[name]() if name in handlers else f"Unknown tool: {name}"

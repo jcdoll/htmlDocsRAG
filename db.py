@@ -169,8 +169,14 @@ def reciprocal_rank_fusion(
 # --- Query functions ---
 
 
-def search_docs(query: str, limit: int = 10, mode: str = "hybrid") -> list[dict]:
-    """Search documentation with keyword, semantic, or hybrid mode."""
+def search_docs(
+    query: str, limit: int = 10, mode: str = "hybrid", source_filter: str | None = None
+) -> list[dict]:
+    """Search documentation with keyword, semantic, or hybrid mode.
+
+    Args:
+        source_filter: Optional substring to filter results by source path (e.g., "llmatlab").
+    """
     if mode not in VALID_SEARCH_MODES:
         raise ValueError(f"Invalid mode '{mode}'. Must be one of: {VALID_SEARCH_MODES}")
 
@@ -200,7 +206,7 @@ def search_docs(query: str, limit: int = 10, mode: str = "hybrid") -> list[dict]
     ).fetchall()
     id_to_row = {r[0]: r for r in rows}
 
-    return [
+    results = [
         {
             "chunk_id": r[0],
             "source": r[1],
@@ -212,6 +218,11 @@ def search_docs(query: str, limit: int = 10, mode: str = "hybrid") -> list[dict]
         for cid in chunk_ids
         if (r := id_to_row.get(cid))
     ]
+
+    if source_filter:
+        results = [r for r in results if source_filter in r["source"]]
+
+    return results
 
 
 def get_chunk(chunk_id: str) -> dict | None:
@@ -297,3 +308,60 @@ def get_source(source_path: str, offset: int = 0, limit: int | None = None) -> d
         for r in rows
     ]
     return {"chunks": chunks, "total": total, "offset": offset}
+
+
+def list_sections(source_path: str) -> list[dict]:
+    """List all section titles in a source file with their first chunk ID."""
+    rows = (
+        get_connection()
+        .execute(
+            """SELECT title, MIN(id) as chunk_id, MIN(chunk_index) as chunk_index
+               FROM chunks WHERE source = ? GROUP BY title ORDER BY MIN(chunk_index)""",
+            (source_path,),
+        )
+        .fetchall()
+    )
+    return [{"title": r[0], "chunk_id": r[1], "chunk_index": r[2]} for r in rows]
+
+
+def get_chunk_by_title(source_path: str, title: str) -> list[dict]:
+    """Get all chunks with a specific title from a source file."""
+    rows = (
+        get_connection()
+        .execute(
+            """SELECT id, source, title, content, chunk_index FROM chunks
+               WHERE source = ? AND title = ? ORDER BY chunk_index""",
+            (source_path, title),
+        )
+        .fetchall()
+    )
+    return [
+        {"chunk_id": r[0], "source": r[1], "title": r[2], "content": r[3], "chunk_index": r[4]}
+        for r in rows
+    ]
+
+
+def search_symbols(prefix: str, limit: int = 50) -> list[dict]:
+    """Search for API/function symbols by prefix (e.g., 'mph', 'model.').
+
+    Uses FTS5 prefix matching to find chunks containing symbols starting with prefix.
+    """
+    if not prefix or not prefix.strip():
+        return []
+    conn = get_connection()
+    # FTS5 prefix search with * suffix
+    safe_prefix = prefix.replace('"', '""')
+    try:
+        rows = conn.execute(
+            """SELECT c.id, c.source, c.title, c.content, -bm25(chunks_fts, 1, 10) as score
+               FROM chunks_fts JOIN chunks c ON chunks_fts.rowid = c.rowid
+               WHERE chunks_fts MATCH ? ORDER BY score DESC LIMIT ?""",
+            (f'"{safe_prefix}"*', limit),
+        ).fetchall()
+        return [
+            {"chunk_id": r[0], "source": r[1], "title": r[2], "content": r[3], "score": r[4]}
+            for r in rows
+        ]
+    except sqlite3.OperationalError as e:
+        logger.warning(f"Symbol search error: {e}")
+        return []
