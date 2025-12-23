@@ -271,6 +271,7 @@ def main():
         test_search(db_path, args.test, args.mode)
     else:
         import asyncio
+
         asyncio.run(run_server(db_path))
 
 

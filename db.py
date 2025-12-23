@@ -211,10 +211,7 @@ def search_titles(pattern: str, limit: int = 50) -> list[dict]:
         )
         .fetchall()
     )
-    return [
-        {"title": r[0], "source": r[1], "chunk_id": r[2], "chunk_count": r[3]}
-        for r in rows
-    ]
+    return [{"title": r[0], "source": r[1], "chunk_id": r[2], "chunk_count": r[3]} for r in rows]
 
 
 def search_docs(
