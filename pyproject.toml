@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["."]
-only-include = ["mcp_server.py", "build_index.py"]
+only-include = ["mcp_server.py", "build_index.py", "db.py", "chunking.py"]
 
 [project]
 name = "local-docs-mcp"
