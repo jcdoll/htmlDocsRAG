@@ -5,11 +5,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from build_index import (
-    file_hash,
-    init_database,
-    process_file,
-)
+from build_index import file_hash, init_database
+from chunking import process_file
 
 
 class TestFileHash:

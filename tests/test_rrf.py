@@ -5,7 +5,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from mcp_server import reciprocal_rank_fusion
+from db import reciprocal_rank_fusion
 
 
 class TestReciprocalRankFusion:

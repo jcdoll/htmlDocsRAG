@@ -38,15 +38,17 @@ docs-mcp --help
 
 You next need to plug it into your favorite IDE. There are two steps: MCP server and skills.
 
+### macOS/Linux
+
 Claude Code:
 ```bash
-claude mcp add --transport stdio comsol-docs -- docs-mcp --db comsol.db
+claude mcp add --transport stdio comsol-docs -- docs-mcp --db ~/.local/share/docs-mcp/comsol.db
 mkdir -p ~/.claude/skills && curl -L https://raw.githubusercontent.com/jcdoll/htmlDocsRAG/main/.claude/skills/comsol-docs.md -o ~/.claude/skills/comsol-docs.md
 ```
 
 Codex CLI:
 ```bash
-codex mcp add comsol-docs "docs-mcp --db comsol.db"
+codex mcp add comsol-docs "docs-mcp --db ~/.local/share/docs-mcp/comsol.db"
 mkdir -p ~/.codex/skills && curl -L https://raw.githubusercontent.com/jcdoll/htmlDocsRAG/main/.codex/skills/comsol-docs.md -o ~/.codex/skills/comsol-docs.md
 ```
 
@@ -56,13 +58,37 @@ Cursor: add to `~/.cursor/mcp.json`:
   "mcpServers": {
     "comsol-docs": {
       "command": "docs-mcp",
-      "args": ["--db", "comsol.db"]
+      "args": ["--db", "~/.local/share/docs-mcp/comsol.db"]
     }
   }
 }
 ```
 
-Database files in `~/.local/share/docs-mcp/` (Linux/macOS) or `%LOCALAPPDATA%\docs-mcp\` (Windows) can be referenced by name only.
+### Windows
+
+Claude Code (PowerShell):
+```powershell
+claude mcp add --transport stdio comsol-docs -- docs-mcp --db "$env:LOCALAPPDATA\docs-mcp\comsol.db"
+mkdir -Force "$env:USERPROFILE\.claude\skills"; Invoke-WebRequest -Uri "https://raw.githubusercontent.com/jcdoll/htmlDocsRAG/main/.claude/skills/comsol-docs.md" -OutFile "$env:USERPROFILE\.claude\skills\comsol-docs.md"
+```
+
+Codex CLI (PowerShell):
+```powershell
+codex mcp add comsol-docs "docs-mcp --db $env:LOCALAPPDATA\docs-mcp\comsol.db"
+mkdir -Force "$env:USERPROFILE\.codex\skills"; Invoke-WebRequest -Uri "https://raw.githubusercontent.com/jcdoll/htmlDocsRAG/main/.codex/skills/comsol-docs.md" -OutFile "$env:USERPROFILE\.codex\skills\comsol-docs.md"
+```
+
+Cursor: add to `%USERPROFILE%\.cursor\mcp.json`:
+```json
+{
+  "mcpServers": {
+    "comsol-docs": {
+      "command": "docs-mcp",
+      "args": ["--db", "%LOCALAPPDATA%\\docs-mcp\\comsol.db"]
+    }
+  }
+}
+```
 
 ## Quick Start (Build Your Own)
 
@@ -84,7 +110,9 @@ For COMSOL-specific conversion, see [docs/comsol.md](docs/comsol.md). You can ad
 |------|-------------|
 | `search_docs` | Hybrid keyword + semantic search. Returns matching chunks with scores. |
 | `get_chunk` | Retrieve a specific chunk by ID. |
-| `list_sources` | List all indexed source files. |
+| `get_context` | Get a chunk with surrounding chunks from the same file for more context. |
+| `get_source` | Get all chunks from a source file to read the full document. |
+| `list_sources` | List all indexed source files with chunk counts. |
 
 Example `search_docs` response:
 ```json

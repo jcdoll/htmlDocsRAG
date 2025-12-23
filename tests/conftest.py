@@ -15,7 +15,7 @@ def cleanup_db():
     """Ensure database connection is closed after each test."""
     yield
     # Close any open database connection after each test
-    from mcp_server import close_db
+    from db import close_db
 
     close_db()
 
@@ -117,7 +117,8 @@ def temp_db(temp_dir: Path) -> Path:
 @pytest.fixture
 def populated_db(temp_db: Path, sample_markdown_files: Path) -> Path:
     """Create and populate a test database without embeddings."""
-    from build_index import init_database, process_file
+    from build_index import init_database
+    from chunking import process_file
 
     conn = init_database(temp_db, embedding_dim=384)
 
