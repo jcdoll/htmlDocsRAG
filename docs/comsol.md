@@ -24,6 +24,8 @@ The HTML files are spread across subdirectories (`comsol_ref_manual/`, `acdc_mod
 
 ```powershell
 uv run python scripts/convert_comsol_html.py "C:\Program Files\COMSOL\COMSOL64\Multiphysics\doc\help\wtpwebapps\ROOT\doc" ./markdown
+uv run python scripts/organize_comsol_docs.py ./markdown
+uv run python scripts/fetch_rtd_docs.py https://mph.readthedocs.io/en/stable/ ./markdown/MPh
 uv run python build_index.py ./markdown --output db/comsol.db --no-embeddings
 uv run python mcp_server.py --db db/comsol.db --test "mesh refinement"
 uv run python build_index.py ./markdown --output db/comsol.db
@@ -33,6 +35,8 @@ uv run python build_index.py ./markdown --output db/comsol.db
 
 ```bash
 uv run python scripts/convert_comsol_html.py /usr/local/comsol/multiphysics/doc/help/wtpwebapps/ROOT/doc ./markdown
+uv run python scripts/organize_comsol_docs.py ./markdown
+uv run python scripts/fetch_rtd_docs.py https://mph.readthedocs.io/en/stable/ ./markdown/MPh
 uv run python build_index.py ./markdown --output db/comsol.db --no-embeddings
 uv run python mcp_server.py --db db/comsol.db --test "boundary conditions"
 uv run python build_index.py ./markdown --output db/comsol.db
@@ -41,6 +45,6 @@ uv run python build_index.py ./markdown --output db/comsol.db
 ## Expected Output
 
 A typical COMSOL 6.4 installation:
-- 8,000 HTML files
+- 8,000 HTML files + 18 MPh markdown files
 - 72,000 chunks after indexing
 - 250 MB database with embeddings

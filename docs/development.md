@@ -113,6 +113,38 @@ pandoc -f rst -t gfm input.rst -o output.md   # Sphinx RST
 pandoc -f docx -t gfm input.docx -o output.md # Word docs
 ```
 
+## Fetching Documentation from GitHub
+
+For projects that host Markdown docs on GitHub:
+
+```bash
+python scripts/fetch_github_docs.py <owner/repo> <docs_path> <output_dir> [--ref <branch>]
+```
+
+Example:
+
+```bash
+python scripts/fetch_github_docs.py some-org/lib docs ./markdown/lib --ref v2.0
+```
+
+The script uses the GitHub API to recursively download all `.md` files while preserving directory structure.
+
+## Fetching Documentation from ReadTheDocs
+
+For projects hosted on ReadTheDocs (or similar Sphinx-based sites):
+
+```bash
+python scripts/fetch_rtd_docs.py <base_url> <output_dir>
+```
+
+Example:
+
+```bash
+python scripts/fetch_rtd_docs.py https://mph.readthedocs.io/en/stable/ ./markdown/MPh
+```
+
+The script crawls from the base URL, following internal links, and converts HTML to Markdown using pandoc. It extracts main content and skips navigation/theme elements.
+
 ## Running Tests
 
 ```bash
