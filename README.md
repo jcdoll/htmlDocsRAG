@@ -53,7 +53,7 @@ command = "docs-mcp"
 args = ["--db", "comsol.db"]
 ```
 ```bash
-mkdir -p ~/.codex/skills && curl -L https://raw.githubusercontent.com/jcdoll/htmlDocsRAG/main/.codex/skills/comsol-docs.md -o ~/.codex/skills/comsol-docs.md
+mkdir -p ~/.codex/skills/comsol-docs && curl -L https://raw.githubusercontent.com/jcdoll/htmlDocsRAG/main/.codex/skills/comsol-docs/SKILL.md -o ~/.codex/skills/comsol-docs/SKILL.md
 ```
 
 Cursor: add to `~/.cursor/mcp.json`:
@@ -83,7 +83,7 @@ command = "docs-mcp"
 args = ["--db", "comsol.db"]
 ```
 ```powershell
-mkdir -Force "$env:USERPROFILE\.codex\skills"; Invoke-WebRequest -Uri "https://raw.githubusercontent.com/jcdoll/htmlDocsRAG/main/.codex/skills/comsol-docs.md" -OutFile "$env:USERPROFILE\.codex\skills\comsol-docs.md"
+mkdir -Force "$env:USERPROFILE\.codex\skills\comsol-docs"; Invoke-WebRequest -Uri "https://raw.githubusercontent.com/jcdoll/htmlDocsRAG/main/.codex/skills/comsol-docs/SKILL.md" -OutFile "$env:USERPROFILE\.codex\skills\comsol-docs\SKILL.md"
 ```
 
 Cursor: add to `%USERPROFILE%\.cursor\mcp.json`:

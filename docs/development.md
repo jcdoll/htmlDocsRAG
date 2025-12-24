@@ -157,8 +157,8 @@ claude mcp add --transport stdio your-docs -- docs-mcp --db your-docs.db
 
 | IDE | User-level location |
 |-----|---------------------|
-| Claude Code | `~/.claude/skills/your-docs.md` |
-| Codex CLI | `~/.codex/skills/your-docs.md` |
+| Claude Code | `~/.claude/skills/your-docs/SKILL.md` |
+| Codex CLI | `~/.codex/skills/your-docs/SKILL.md` |
 
 ### Tips
 
