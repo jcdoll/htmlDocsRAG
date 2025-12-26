@@ -26,6 +26,7 @@ The HTML files are spread across subdirectories (`comsol_ref_manual/`, `acdc_mod
 uv run python scripts/convert_comsol_html.py "C:\Program Files\COMSOL\COMSOL64\Multiphysics\doc\help\wtpwebapps\ROOT\doc" ./markdown
 uv run python scripts/organize_comsol_docs.py ./markdown
 uv run python scripts/fetch_rtd_docs.py https://mph.readthedocs.io/en/stable/ ./markdown/MPh
+rm db/comsol.db
 uv run python build_index.py ./markdown --output db/comsol.db --no-embeddings
 uv run python mcp_server.py --db db/comsol.db --test "mesh refinement"
 uv run python build_index.py ./markdown --output db/comsol.db
@@ -37,6 +38,7 @@ uv run python build_index.py ./markdown --output db/comsol.db
 uv run python scripts/convert_comsol_html.py /usr/local/comsol/multiphysics/doc/help/wtpwebapps/ROOT/doc ./markdown
 uv run python scripts/organize_comsol_docs.py ./markdown
 uv run python scripts/fetch_rtd_docs.py https://mph.readthedocs.io/en/stable/ ./markdown/MPh
+rm db/comsol.db
 uv run python build_index.py ./markdown --output db/comsol.db --no-embeddings
 uv run python mcp_server.py --db db/comsol.db --test "boundary conditions"
 uv run python build_index.py ./markdown --output db/comsol.db

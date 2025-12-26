@@ -134,6 +134,41 @@ def extract_links(html: bytes, base_url: str) -> list[str]:
     return links
 
 
+class TagStripper(HTMLParser):
+    """Strip HTML tags, keeping only text content."""
+
+    def __init__(self):
+        super().__init__()
+        self.text = []
+        self.skip_tags = {"script", "style"}
+        self.skip_depth = 0
+
+    def handle_starttag(self, tag, attrs):
+        if tag in self.skip_tags:
+            self.skip_depth += 1
+
+    def handle_endtag(self, tag):
+        if tag in self.skip_tags and self.skip_depth > 0:
+            self.skip_depth -= 1
+
+    def handle_data(self, data):
+        if self.skip_depth == 0:
+            self.text.append(data)
+
+    def get_text(self) -> str:
+        return "".join(self.text)
+
+
+def strip_html_tags(markdown: str) -> str:
+    """Remove any remaining HTML tags from markdown."""
+    parser = TagStripper()
+    try:
+        parser.feed(markdown)
+        return parser.get_text()
+    except Exception:
+        return markdown
+
+
 def html_to_markdown(html_content: bytes) -> str | None:
     """Convert HTML to Markdown using pandoc."""
     # Extract main content first
@@ -147,7 +182,9 @@ def html_to_markdown(html_content: bytes) -> str | None:
             timeout=30,
         )
         if result.returncode == 0:
-            return result.stdout.decode("utf-8")
+            markdown = result.stdout.decode("utf-8")
+            # Strip any remaining HTML tags
+            return strip_html_tags(markdown)
     except subprocess.TimeoutExpired:
         pass
     except FileNotFoundError:
